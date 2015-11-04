@@ -1,0 +1,10 @@
+#
+#  Systemd script to Launch AMD Session agent
+#
+
+[Unit]
+Description=Start the USER Access Control Agent
+
+[Service]
+ExecStart=/bin/sh -l -c "/usr/bin/launchpad-process-pool"
+Sockets=launchpad-process-pool.socket

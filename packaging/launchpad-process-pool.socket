@@ -1,0 +1,10 @@
+[Socket]
+ListenStream=/run/user/%U/-5
+ListenStream=/run/user/%U/.launchpad-type0
+ListenStream=/run/user/%U/.launchpad-type1
+ListenStream=/run/user/%U/.launchpad-type2
+
+Service=launchpad-process-pool.service
+
+[Install]
+WantedBy=sockets.target
