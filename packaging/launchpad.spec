@@ -19,6 +19,7 @@ BuildRequires:  pkgconfig(libsystemd-daemon)
 BuildRequires:  pkgconfig(elementary)
 BuildRequires:  pkgconfig(vconf)
 BuildRequires:  pkgconfig(security-manager)
+BuildRequires:  pkgconfig(aul)
 
 Requires(post): /sbin/ldconfig
 Requires(post): /usr/bin/systemctl

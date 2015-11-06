@@ -34,6 +34,9 @@
 #define LOG_TAG "LAUNCHPAD"
 #endif
 
+#define SOCKET_PATH "/run/user"
+#define LAUNCHPAD_LOADER_SOCKET_NAME ".launchpad-type"
+#define MAX_PENDING_CONNECTIONS 10
 #define MAX_LOCAL_BUFSZ 128
 #define AUL_SOCK_MAXBUFF 65535
 
@@ -77,10 +80,7 @@ void _modify_bundle(bundle * kb, int caller_pid, app_info_from_db * menu_info, i
 int _create_server_sock(int pid);
 app_pkt_t *_recv_pkt_raw(int fd, int *clifd, struct ucred *cr);
 int _send_pkt_raw(int client_fd, app_pkt_t *pkt);
-int  _listen_candidate_process(int type);
 int  _connect_to_launchpad(int type);
-int  _accept_candidate_process(int server_fd, int* out_client_fd, int* out_client_pid);
-void _refuse_candidate_process(int server_fd);
 void _set_oom(void);
 void _set_env(app_info_from_db * menu_info, bundle * kb);
 char** _create_argc_argv(bundle * kb, int *margc);

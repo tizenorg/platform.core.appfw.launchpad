@@ -22,10 +22,13 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <malloc.h>
 #include <bundle_internal.h>
 #include <security-manager.h>
 #include <time.h>
+#include <vconf.h>
+#include <systemd/sd-daemon.h>
 
 #include "perf.h"
 #include "launchpad_common.h"
@@ -62,6 +65,128 @@ static candidate __candidate[LAUNCHPAD_TYPE_MAX] = {
 static int launchpad_fd = -1;
 static int pool_fd[LAUNCHPAD_TYPE_MAX] = { -1, -1, -1 };
 
+static void __refuse_candidate_process(int server_fd)
+{
+	int client_fd = -1;
+
+	if (server_fd == -1) {
+		_E("arguments error!");
+		goto error;
+	}
+
+	client_fd = accept(server_fd, NULL, NULL);
+	if (client_fd == -1) {
+		_E("accept error!");
+		goto error;
+	}
+
+	close(client_fd);
+	_D("refuse connection!");
+
+error:
+	return;
+}
+
+static int __accept_candidate_process(int server_fd, int* out_client_fd,
+                              int* out_client_pid)
+{
+	int client_fd = -1, client_pid = 0, recv_ret = 0;
+
+	if (server_fd == -1 || out_client_fd == NULL || out_client_pid == NULL) {
+		_E("arguments error!");
+		goto error;
+	}
+
+	client_fd = accept(server_fd, NULL, NULL);
+
+	if (client_fd == -1) {
+		_E("accept error!");
+		goto error;
+	}
+
+	recv_ret = recv(client_fd, &client_pid, sizeof(client_pid), MSG_WAITALL);
+
+	if (recv_ret == -1) {
+		_E("recv error!");
+		goto error;
+	}
+
+	*out_client_fd = client_fd;
+	*out_client_pid = client_pid;
+
+	return *out_client_fd;
+
+error:
+	if (client_fd != -1)
+		close(client_fd);
+
+	return -1;
+}
+
+static int __listen_candidate_process(int type)
+{
+	struct sockaddr_un addr;
+	int fd = -1;
+	int listen_fds = 0;
+	int i;
+
+	_D("[launchpad] enter, type: %d", type);
+
+	memset(&addr, 0x00, sizeof(struct sockaddr_un));
+	addr.sun_family = AF_UNIX;
+	snprintf(addr.sun_path, UNIX_PATH_MAX, "%s/%d/%s%d", SOCKET_PATH, getuid(),
+		LAUNCHPAD_LOADER_SOCKET_NAME, type);
+
+	listen_fds = sd_listen_fds(0);
+	if (listen_fds < 0) {
+		_E("Invalid systemd environment");
+		return -1;
+	} else if (listen_fds > 0) {
+		for (i = 0; i < listen_fds; i++) {
+			fd = SD_LISTEN_FDS_START + i;
+			if (sd_is_socket_unix(fd, SOCK_STREAM, 1, addr.sun_path, 0))
+				return fd;
+		}
+		_E("Socket not found: %s", addr.sun_path);
+		return -1;
+	}
+
+	fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+	if (fd < 0) {
+		_E("Socket error");
+		goto error;
+	}
+
+	unlink(addr.sun_path);
+
+	_D("bind to %s", addr.sun_path);
+	if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+		_E("bind error");
+		goto error;
+	}
+
+	_D("chmod %s", addr.sun_path);
+	if (chmod(addr.sun_path, (S_IRWXU | S_IRWXG | S_IRWXO)) < 0) {
+		_E("chmod error");
+		goto error;
+	}
+
+	_D("listen to %s", addr.sun_path);
+	if (listen(fd, MAX_PENDING_CONNECTIONS) == -1) {
+		_E("listen error");
+		goto error;
+	}
+
+	SECURE_LOGD("[launchpad] done, listen fd: %d", fd);
+	return fd;
+
+error:
+	if (fd != -1)
+		close(fd);
+
+	return -1;
+}
+
 static int __set_access(const char* appId, const char* pkg_type,
 			const char* app_path)
 {
@@ -79,7 +204,6 @@ static int __get_launchpad_type(const char* internal_pool, const char* hwacc)
 			_D("[launchpad] launchpad type: H/W(%d)", LAUNCHPAD_TYPE_HW);
 			return LAUNCHPAD_TYPE_HW;
 		}
-		/* TODO: FIXME
 		if (strncmp(hwacc, "SYS", 3) == 0) {
 		    int r;
 		    int sys_hwacc = -1;
@@ -98,7 +222,7 @@ static int __get_launchpad_type(const char* internal_pool, const char* hwacc)
 		        _D("[launchpad] launchpad type: S/W(%d)", LAUNCHPAD_TYPE_SW);
 		        return LAUNCHPAD_TYPE_SW;
 		    }
-		}*/
+		}
 	}
 
 	_D("[launchpad] launchpad type: COMMON(%d)", LAUNCHPAD_TYPE_COMMON);
@@ -560,7 +684,7 @@ static int __init_pfds(struct pollfd *pfds, int argc, char **argv)
 	pfds[LAUNCH_PAD].revents = 0;
 
 	for (i = 0; i < LAUNCHPAD_TYPE_MAX; ++i) {
-		pool_fd[i] = _listen_candidate_process(i);
+		pool_fd[i] = __listen_candidate_process(i);
 		if (pool_fd[i] == -1) {
 			_E("[launchpad] Listening the socket to the type %d candidate process failed.",
 			   i);
@@ -648,19 +772,19 @@ static int __loop_begin(struct pollfd *pfds)
 				_D("pfds[POOL_TYPE + %d].revents & POLLIN", i);
 
 				if (__candidate[i].pid == CANDIDATE_NONE) {
-					_accept_candidate_process(server_fd, &client_fd, &client_pid);
+					if (__accept_candidate_process(server_fd, &client_fd, &client_pid) >= 0) {
+						__candidate[i].pid = client_pid;
+						__candidate[i].send_fd = client_fd;
 
-					__candidate[i].pid = client_pid;
-					__candidate[i].send_fd = client_fd;
+						pfds[CANDIDATE_TYPE + i].fd   = client_fd;
+						pfds[CANDIDATE_TYPE + i].events  = POLLIN | POLLHUP;
+						pfds[CANDIDATE_TYPE + i].revents = 0;
 
-					pfds[CANDIDATE_TYPE + i].fd   = client_fd;
-					pfds[CANDIDATE_TYPE + i].events  = POLLIN | POLLHUP;
-					pfds[CANDIDATE_TYPE + i].revents = 0;
-
-					SECURE_LOGD("Type %d candidate process was connected, pid: %d", i,
-						__candidate[i].pid);
+						SECURE_LOGD("Type %d candidate process was connected, pid: %d", i,
+							__candidate[i].pid);
+					}
 				} else {
-					_refuse_candidate_process(server_fd);
+					__refuse_candidate_process(server_fd);
 					_E("Refused candidate process connection");
 				}
 			}
