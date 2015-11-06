@@ -12,13 +12,13 @@ Source102:  launchpad-process-pool.socket
 BuildRequires:  cmake
 BuildRequires:  pkgconfig(bundle)
 BuildRequires:  pkgconfig(dbus-glib-1)
-BuildRequires:  pkgconfig(sqlite3)
 BuildRequires:  pkgconfig(ecore)
 BuildRequires:  pkgconfig(dlog)
 BuildRequires:  pkgconfig(libsystemd-daemon)
 BuildRequires:  pkgconfig(elementary)
 BuildRequires:  pkgconfig(vconf)
 BuildRequires:  pkgconfig(security-manager)
+BuildRequires:  pkgconfig(aul)
 
 Requires(post): /sbin/ldconfig
 Requires(post): /usr/bin/systemctl

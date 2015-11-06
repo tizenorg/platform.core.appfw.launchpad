@@ -24,19 +24,18 @@
 #include <sys/types.h>
 #include <grp.h>
 #include <pwd.h>
-#include <sqlite3.h>
 #include <Elementary.h>
 #include <Ecore.h>
 #include <bundle_internal.h>
-#include <dbus/dbus-glib-lowlevel.h>
 #include <security-manager.h>
+#include <aul.h>
 
 #include "menu_db_util.h"
 #include "launchpad_common.h"
 #include "preload.h"
 #include "process_pool_preload.h"
 #include "preexec.h"
-#include "key.h"
+
 
 #define AUL_PR_NAME 16
 #define LOWEST_PRIO 20
@@ -123,7 +122,7 @@ static void __candidate_process_launchpad_main_loop(app_pkt_t* pkt,
 
 	const char *app_id = NULL;
 	const char *app_path = NULL;
-	//const char *pkg_id = NULL;
+	const char *pkg_id = NULL;
 
 	kb = bundle_decode(pkt->data, pkt->len);
 	if (!kb) {
@@ -176,14 +175,12 @@ static void __candidate_process_launchpad_main_loop(app_pkt_t* pkt,
 		exit(-1);
 	}
 	SECURE_LOGD("app id: %s", app_id);
-#if 0
-	//TODO : FIXME
 	__appid = strdup(app_id);
 	if (__appid == NULL) {
 		_E("Out of memory");
 		exit(-1);
 	}
-	//aul_set_preinit_appid(__appid); //TODO
+	aul_set_preinit_appid(__appid);
 
 	// caching pkgid
 	pkg_id = _get_pkgid(menu_info);
@@ -198,8 +195,7 @@ static void __candidate_process_launchpad_main_loop(app_pkt_t* pkt,
 		_E("Out of memory");
 		exit(-1);
 	}
-	//aul_set_preinit_pkgid(__pkgid); //TODO
-#endif
+	aul_set_preinit_pkgid(__pkgid);
 
 	atexit(__release_appid_at_exit);
 
@@ -300,7 +296,6 @@ static Eina_Bool __candidate_proces_fd_handler(void* data,
 
 static void __init_window(void)
 {
-#if 0 //TODO : FIXME
 	Evas_Object *win = elm_win_add(NULL, "package_name", ELM_WIN_BASIC);
 	if (win) {
 		aul_set_preinit_window(win);
@@ -325,7 +320,6 @@ static void __init_window(void)
 	} else {
 		_E("[candidate] elm_win_add() failed");
 	}
-#endif
 }
 
 static void __init_theme(void)
