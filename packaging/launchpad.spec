@@ -52,10 +52,10 @@ export FFLAGS="$FFLAGS -DTIZEN_DEBUG_ENABLE"
 _APPFW_FEATURE_PRIORITY_CHANGE=ON
 %endif
 
-cmake -DCMAKE_INSTALL_PREFIX=%{_prefix} \
-	-D_APPFW_FEATURE_PRIORITY_CHANGE:BOOL=${_APPFW_FEATURE_PRIORITY_CHANGE}
-
-make %{?jobs:-j%jobs}
+%cmake -DVERSION=%{version} \
+	-D_APPFW_FEATURE_PRIORITY_CHANGE:BOOL=${_APPFW_FEATURE_PRIORITY_CHANGE} \
+	.
+%__make %{?_smp_mflags}
 
 %install
 rm -rf %{buildroot}
@@ -83,4 +83,9 @@ cp %{_builddir}/%{name}-%{version}/LICENSE  %{buildroot}/usr/share/license/%{nam
 %{_unitdir_user}/default.target.wants/launchpad-process-pool.service
 %caps(cap_mac_admin,cap_mac_override,cap_setgid=ei) %{_bindir}/launchpad-process-pool
 %caps(cap_mac_admin,cap_mac_override,cap_setgid=ei) %{_bindir}/launchpad-loader
+%attr(0644,root,root) %{_libdir}/liblaunchpad.so.*
 
+%files devel
+%{_includedir}/launchpad/*.h
+%{_libdir}/*.so
+%{_libdir}/pkgconfig/*.pc
