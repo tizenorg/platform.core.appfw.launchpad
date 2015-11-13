@@ -65,14 +65,6 @@ typedef struct _app_pkt_t {
 	unsigned char data[1];
 } app_pkt_t;
 
-enum LAUNCHPAD_TYPE {
-	LAUNCHPAD_TYPE_UNSUPPORTED = -1,
-	LAUNCHPAD_TYPE_COMMON,
-	LAUNCHPAD_TYPE_SW,
-	LAUNCHPAD_TYPE_HW,
-	LAUNCHPAD_TYPE_MAX
-};
-
 char *_proc_get_cmdline_bypid(int pid);
 app_info_from_db *_get_app_info_from_bundle_by_pkgname(const char *pkgname, bundle *kb);
 void _modify_bundle(bundle * kb, int caller_pid, app_info_from_db * menu_info, int cmd);

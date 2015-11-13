@@ -34,6 +34,7 @@
 #include "launchpad_common.h"
 #include "sigchild.h"
 #include "key.h"
+#include "launchpad.h"
 
 #define AUL_PR_NAME         16
 #define AUL_POLL_CNT        15
