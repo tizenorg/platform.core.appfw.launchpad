@@ -3,6 +3,7 @@ ListenStream=/run/user/%U/-5
 ListenStream=/run/user/%U/.launchpad-type0
 ListenStream=/run/user/%U/.launchpad-type1
 ListenStream=/run/user/%U/.launchpad-type2
+ListenStream=/run/user/%U/.launchpad-type3
 
 Service=launchpad-process-pool.service
 

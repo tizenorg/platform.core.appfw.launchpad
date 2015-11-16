@@ -194,8 +194,13 @@ static int __set_access(const char* appId, const char* pkg_type,
 	return security_manager_prepare_app(appId) == SECURITY_MANAGER_SUCCESS ? 0 : -1;
 }
 
-static int __get_launchpad_type(const char* internal_pool, const char* hwacc)
+static int __get_launchpad_type(const char* internal_pool, const char* hwacc, const char *pkg_type)
 {
+	if (pkg_type && strncmp(pkg_type, "wgt", 3) == 0) {
+		_D("[launchpad] launchpad type: wrt");
+		return LAUNCHPAD_TYPE_WRT;
+	}
+
 	if (internal_pool && strncmp(internal_pool, "true", 4) == 0 && hwacc) {
 		if (strncmp(hwacc, "NOT_USE", 7) == 0) {
 			_D("[launchpad] launchpad type: S/W(%d)", LAUNCHPAD_TYPE_SW);
@@ -328,9 +333,13 @@ static void __prepare_candidate_process(int type)
 
 	if (pid == 0) { /* child */
 		char type_str[2] = {0,};
+		char *bin = "/usr/bin/launchpad-loader";
+
+		if (type == LAUNCHPAD_TYPE_WRT)
+			bin = "/usr/bin/wrt_pool";
 
 		/* execute with very long (1024 bytes) argument in order to prevent argv overflow caused by dlopen */
-		char *argv[] = {"/usr/bin/launchpad-loader", NULL,
+		char *argv[] = { bin, NULL,
 		                "                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                ", NULL
 		               };
 		__signal_unblock_sigchld();
@@ -581,7 +590,9 @@ static void __launchpad_main_loop(int launchpad_fd, int *pool_fd)
 
 	SECURE_LOGD("internal pool : %s\n", internal_pool);
 	SECURE_LOGD("hwacc : %s\n", menu_info->hwacc);
-	type = __get_launchpad_type(internal_pool, menu_info->hwacc);
+	SECURE_LOGD("pkg type : %s\n", menu_info->pkg_type);
+
+	type = __get_launchpad_type(internal_pool, menu_info->hwacc, menu_info->pkg_type);
 	if (type < 0) {
 		_E("failed to get launchpad type");
 		goto end;
@@ -595,13 +606,13 @@ static void __launchpad_main_loop(int launchpad_fd, int *pool_fd)
 	}
 
 	PERF("get package information & modify bundle done");
-
 	if ((type >= 0) && (type < LAUNCHPAD_TYPE_MAX)
 		&& (__candidate[type].pid != CANDIDATE_NONE)
 		&& (DIFF(__candidate[type].last_exec_time, time(NULL)) > EXEC_CANDIDATE_WAIT)) {
 		_W("Launch on type-based process-pool");
 		pid = __send_launchpad_loader(type, pkt, app_path, clifd);
-	} else if ((__candidate[LAUNCHPAD_TYPE_COMMON].pid != CANDIDATE_NONE)
+	} else if ((type == LAUNCHPAD_TYPE_SW || type == LAUNCHPAD_TYPE_HW)
+		&& (__candidate[LAUNCHPAD_TYPE_COMMON].pid != CANDIDATE_NONE)
 		&& (DIFF(__candidate[LAUNCHPAD_TYPE_COMMON].last_exec_time,
 		time(NULL)) > EXEC_CANDIDATE_WAIT)) {
 		_W("Launch on common type process-pool");
@@ -611,6 +622,7 @@ static void __launchpad_main_loop(int launchpad_fd, int *pool_fd)
 		pid = __launch_directly(pkg_name, app_path, clifd, kb, menu_info);
 		__send_result_to_caller(clifd, pid, app_path);
 	}
+
 	clifd = -1;
 
 end:
