@@ -73,7 +73,6 @@ int _create_server_sock(int pid);
 app_pkt_t *_recv_pkt_raw(int fd, int *clifd, struct ucred *cr);
 int _send_pkt_raw(int client_fd, app_pkt_t *pkt);
 int  _connect_to_launchpad(int type);
-void _set_oom(void);
 void _set_env(app_info_from_db * menu_info, bundle * kb);
 char** _create_argc_argv(bundle * kb, int *margc);
 

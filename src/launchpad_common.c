@@ -499,21 +499,6 @@ error:
 	return -1;
 }
 
-void _set_oom(void)
-{
-	char buf[MAX_LOCAL_BUFSZ];
-	FILE *fp;
-
-	/* we should reset oomadj value as default because child
-	inherits from parent oom_adj*/
-	snprintf(buf, MAX_LOCAL_BUFSZ, "/proc/%d/oom_adj", getpid());
-	fp = fopen(buf, "w");
-	if (fp == NULL)
-		return;
-	fprintf(fp, "%d", -16);
-	fclose(fp);
-}
-
 void _set_env(app_info_from_db * menu_info, bundle * kb)
 {
 	const char *str;

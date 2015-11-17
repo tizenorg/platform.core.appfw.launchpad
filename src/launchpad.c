@@ -449,9 +449,6 @@ static int __prepare_exec(const char *appId, const char *app_path,
 	/* TODO : should be add to check permission in the kernel*/
 	setsid();
 
-	/* SET OOM*/
-	_set_oom();
-
 	/* SET PRIVILEGES*/
 	if (bundle_get_val(kb, AUL_K_PRIVACY_APPID) == NULL) {
 		_D("appId: %s / pkg_type : %s / app_path : %s ", appId, menu_info->pkg_type,
