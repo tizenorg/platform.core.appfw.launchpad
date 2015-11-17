@@ -80,14 +80,6 @@ static void __loader_create_cb(int argc, char **argv, int type, void *user_data)
 	__preload_init(argc, argv);
 	__preload_init_for_process_pool();
 
-	/* Set new session ID & new process group ID*/
-	/* In linux, child can set new session ID without check permission */
-	/* TODO : should be add to check permission in the kernel*/
-	setsid();
-
-	/* SET OOM*/
-	_set_oom();
-
 	elm_init_cnt = elm_init(g_argc, g_argv);
 	_D("[candidate] elm init, returned: %d", elm_init_cnt);
 

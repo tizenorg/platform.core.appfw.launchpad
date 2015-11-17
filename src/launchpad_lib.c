@@ -302,6 +302,15 @@ static int __before_loop(int argc, char **argv)
 	}
 #endif
 	__preexec_init(argc, argv);
+
+	/* Set new session ID & new process group ID*/
+	/* In linux, child can set new session ID without check permission */
+	/* TODO : should be add to check permission in the kernel*/
+	setsid();
+
+	/* SET OOM*/
+	_set_oom();
+
 	if (__loader_callbacks->create) {
 		__loader_callbacks->create(argc, argv, __loader_type, __loader_user_data);
 		__loader_adapter->add_fd(__loader_user_data, client_fd, __receiver_cb);
