@@ -69,7 +69,7 @@ char *_proc_get_cmdline_bypid(int pid);
 app_info_from_db *_get_app_info_from_bundle_by_pkgname(const char *pkgname, bundle *kb);
 void _modify_bundle(bundle * kb, int caller_pid, app_info_from_db * menu_info, int cmd);
 
-int _create_server_sock(int pid);
+int _create_server_sock(const char *name);
 app_pkt_t *_recv_pkt_raw(int fd, int *clifd, struct ucred *cr);
 int _send_pkt_raw(int client_fd, app_pkt_t *pkt);
 int  _connect_to_launchpad(int type);

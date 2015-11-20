@@ -173,7 +173,7 @@ static int __parse_app_path(const char *arg, char *out, int out_size)
 	return -2;
 }
 
-int _create_server_sock(int pid)
+int _create_server_sock(const char *name)
 {
 	struct sockaddr_un saddr;
 	int fd;
@@ -195,7 +195,7 @@ int _create_server_sock(int pid)
 
 	memset(&saddr, 0, sizeof(saddr));
 	saddr.sun_family = AF_UNIX;
-	snprintf(saddr.sun_path, UNIX_PATH_MAX, "/run/user/%d/%d", getuid(), pid);
+	snprintf(saddr.sun_path, UNIX_PATH_MAX, "/run/user/%d/%s", getuid(), name);
 	unlink(saddr.sun_path);
 
 	if (bind(fd, (struct sockaddr *)&saddr, sizeof(saddr)) < 0) {

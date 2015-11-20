@@ -267,11 +267,11 @@ static void __receiver_cb(int fd)
 	_D("[candidate] recv_ret: %d, pkt->len: %d", recv_ret, pkt->len);
 
 	__loader_adapter->remove_fd(__loader_user_data, fd);
+	close(fd);
 	ret = __candidate_process_launchpad_main_loop(pkt, __argv[0], &__argc, &__argv,
 	        __loader_type);
 	SECURE_LOGD("[candidate] real app argv[0]: %s, real app argc: %d", __argv[0],
 	            __argc);
-	close(fd);
 	free(pkt);
 
 	if (ret >= 0) {
