@@ -46,6 +46,7 @@
 
 typedef struct {
 	int pid;
+	int effective_pid;
 	int send_fd;
 	int last_exec_time;
 } candidate;
@@ -58,10 +59,10 @@ enum {
 	POLLFD_MAX = LAUNCHPAD_TYPE_MAX * 2 + 2
 };
 
-static int initialized = 0;
 static candidate __candidate[LAUNCHPAD_TYPE_MAX] = {
-	{ CANDIDATE_NONE, -1, 0 },
-	{ CANDIDATE_NONE, -1, 0 }
+	{ CANDIDATE_NONE, CANDIDATE_NONE, -1, 0 },
+	{ CANDIDATE_NONE, CANDIDATE_NONE, -1, 0 },
+	{ CANDIDATE_NONE, CANDIDATE_NONE, -1, 0 }
 };
 static int launchpad_fd = -1;
 static int pool_fd[LAUNCHPAD_TYPE_MAX] = { -1, -1, -1 };
@@ -327,6 +328,8 @@ static void __prepare_candidate_process(int type)
 			_D("Succeeded to prepare candidate_process");
 
 		exit(-1);
+	} else {
+		__candidate[type].effective_pid = pid;
 	}
 }
 
@@ -370,6 +373,7 @@ static int __send_launchpad_loader(int type, app_pkt_t *pkt,
 	close(__candidate[type].send_fd);
 
 	__candidate[type].pid = CANDIDATE_NONE;
+	__candidate[type].effective_pid = CANDIDATE_NONE;
 	__candidate[type].send_fd = -1;
 
 	/* Temporary log: launch time checking */
@@ -508,7 +512,7 @@ static int __launch_directly(const char *appid, const char *app_path, int clifd,
 	return pid;
 }
 
-static void __launchpad_main_loop(int launchpad_fd, int *pool_fd)
+static void __handle_launch_event(int launchpad_fd, int *pool_fd)
 {
 	bundle *kb = NULL;
 	app_pkt_t *pkt = NULL;
@@ -614,12 +618,82 @@ end:
 		bundle_free(kb);
 	if (pkt != NULL)
 		free(pkt);
+}
 
-	/* Active Flusing for Daemon */
-	if (initialized > AUL_POLL_CNT) {
-		malloc_trim(0);
-		initialized = 1;
+static void __handle_loader_exception(struct pollfd *pfds, int type)
+{
+	SECURE_LOGD("pfds[CANDIDATE_TYPE + %d].revents & (POLLHUP|POLLNVAL), pid: %d",
+	            type, __candidate[type].pid);
+
+	if (pfds[CANDIDATE_TYPE + type].fd > -1)
+		close(pfds[CANDIDATE_TYPE + type].fd);
+
+	if (__candidate[type].pid == __candidate[type].effective_pid)
+		__prepare_candidate_process(type);
+
+	__candidate[type].pid = CANDIDATE_NONE;
+	__candidate[type].send_fd = -1;
+
+	pfds[CANDIDATE_TYPE + type].fd   = -1;
+	pfds[CANDIDATE_TYPE + type].events  = 0;
+	pfds[CANDIDATE_TYPE + type].revents = 0;
+}
+
+static void __handle_loader_event(struct pollfd *pfds, int type)
+{
+	int server_fd, client_fd;
+	int client_pid;
+
+	server_fd = pfds[POOL_TYPE + type].fd;
+
+	_D("pfds[POOL_TYPE + %d].revents & POLLIN", type);
+
+	if (__candidate[type].pid == CANDIDATE_NONE) {
+		if (__accept_candidate_process(server_fd, &client_fd, &client_pid) >= 0) {
+			__candidate[type].pid = client_pid;
+			__candidate[type].send_fd = client_fd;
+
+			pfds[CANDIDATE_TYPE + type].fd   = client_fd;
+			pfds[CANDIDATE_TYPE + type].events  = POLLIN | POLLHUP;
+			pfds[CANDIDATE_TYPE + type].revents = 0;
+
+			SECURE_LOGD("Type %d candidate process was connected, pid: %d", type,
+			            __candidate[type].pid);
+		}
+	} else {
+		__refuse_candidate_process(server_fd);
+		_E("Refused candidate process connection");
 	}
+}
+
+static void __handle_sigchild(struct pollfd *pfds)
+{
+	struct signalfd_siginfo siginfo;
+	ssize_t s;
+	int i;
+
+	do {
+		s = read(pfds[SIGCHLD_FD].fd, &siginfo, sizeof(struct signalfd_siginfo));
+		if (s == 0)
+			break;
+
+		if (s != sizeof(struct signalfd_siginfo)) {
+			_E("error reading sigchld info");
+			break;
+		}
+		__launchpad_process_sigchld(&siginfo);
+
+		for (i = 0; i < LAUNCHPAD_TYPE_MAX; ++i) {
+			if (__candidate[i].effective_pid == siginfo.ssi_pid) {
+				pfds[CANDIDATE_TYPE + i].fd   = -1;
+				pfds[CANDIDATE_TYPE + i].events  = 0;
+				pfds[CANDIDATE_TYPE + i].revents = 0;
+				__prepare_candidate_process(i);
+				break;
+			}
+		}
+
+	} while (s > 0);
 }
 
 static int __create_sock_activation(void)
@@ -655,22 +729,6 @@ static int __launchpad_pre_init(int argc, char **argv)
 	}
 
 	return fd;
-}
-
-static int __launchpad_post_init()
-{
-	/* Setting this as a global variable to keep track
-	of launchpad poll cnt */
-	/* static int initialized = 0;*/
-
-	if (initialized) {
-		++initialized;
-		return 0;
-	}
-
-	++initialized;
-
-	return 0;
 }
 
 static int __init_pfds(struct pollfd *pfds, int argc, char **argv)
@@ -712,107 +770,60 @@ static int __init_pfds(struct pollfd *pfds, int argc, char **argv)
 	return 0;
 }
 
+static void __print_events(struct pollfd *pfds)
+{
+	int i;
+
+	_D("pfds[LAUNCH_PAD].revent  : 0x%x", pfds[LAUNCH_PAD].revents) ;
+	for (i = 0; i < LAUNCHPAD_TYPE_MAX; ++i) {
+		_D("pfds[POOL_TYPE + %d].revents : 0x%x", i, pfds[POOL_TYPE + i].revents) ;
+		_D("pfds[CANDIDATE_TYPE + %d].revents : 0x%x", i,
+		   pfds[CANDIDATE_TYPE + i].revents);
+	}
+}
+
 static int __loop_begin(struct pollfd *pfds)
 {
 	int i;
 
 	while (1) {
-		for (i = 0; i < LAUNCHPAD_TYPE_MAX; ++i) {
-			if (__candidate[i].pid == CANDIDATE_NONE) {
-				pfds[CANDIDATE_TYPE + i].fd   = -1;
-				pfds[CANDIDATE_TYPE + i].events  = 0;
-				pfds[CANDIDATE_TYPE + i].revents = 0;
-
-				if (DIFF(__candidate[i].last_exec_time, time(NULL)) > EXEC_CANDIDATE_EXPIRED)
-					__prepare_candidate_process(i);
-			}
-		}
-
 		if (poll(pfds, POLLFD_MAX, -1) < 0)
 			continue;
 
-		_D("pfds[LAUNCH_PAD].revent  : 0x%x", pfds[LAUNCH_PAD].revents) ;
-		for (i = 0; i < LAUNCHPAD_TYPE_MAX; ++i) {
-			_D("pfds[POOL_TYPE + %d].revents : 0x%x", i, pfds[POOL_TYPE + i].revents) ;
-			_D("pfds[CANDIDATE_TYPE + %d].revents : 0x%x", i,
-			   pfds[CANDIDATE_TYPE + i].revents);
-		}
+		__print_events(pfds);
 
-		/* init with concerning X & EFL (because of booting
-		* sequence problem)*/
-		if (__launchpad_post_init() < 0) {
-			_E("launcpad post init failed");
-			return -1;
-		}
-
-		if ((pfds[SIGCHLD_FD].revents & POLLIN) != 0) {
-			struct signalfd_siginfo siginfo;
-			ssize_t s;
-
-			do {
-				s = read(pfds[SIGCHLD_FD].fd, &siginfo, sizeof(struct signalfd_siginfo));
-				if (s == 0)
-					break;
-
-				if (s != sizeof(struct signalfd_siginfo)) {
-					_E("error reading sigchld info");
-					break;
-				}
-				__launchpad_process_sigchld(&siginfo);
-			} while (s > 0);
-		}
+		if ((pfds[SIGCHLD_FD].revents & POLLIN) != 0)
+			__handle_sigchild(pfds);
 
 		if ((pfds[LAUNCH_PAD].revents & POLLIN) != 0) {
 			_D("pfds[LAUNCH_PAD].revents & POLLIN");
-			__launchpad_main_loop(pfds[LAUNCH_PAD].fd, pool_fd);
+			__handle_launch_event(pfds[LAUNCH_PAD].fd, pool_fd);
 		}
 
 		for (i = 0; i < LAUNCHPAD_TYPE_MAX; ++i) {
-			if ((pfds[POOL_TYPE + i].revents & POLLIN) != 0) {
-				int server_fd, client_fd;
-				int client_pid;
+			if ((pfds[POOL_TYPE + i].revents & POLLIN) != 0)
+				__handle_loader_event(pfds, i);
 
-				server_fd = pfds[POOL_TYPE + i].fd;
-
-				_D("pfds[POOL_TYPE + %d].revents & POLLIN", i);
-
-				if (__candidate[i].pid == CANDIDATE_NONE) {
-					if (__accept_candidate_process(server_fd, &client_fd, &client_pid) >= 0) {
-						__candidate[i].pid = client_pid;
-						__candidate[i].send_fd = client_fd;
-
-						pfds[CANDIDATE_TYPE + i].fd   = client_fd;
-						pfds[CANDIDATE_TYPE + i].events  = POLLIN | POLLHUP;
-						pfds[CANDIDATE_TYPE + i].revents = 0;
-
-						SECURE_LOGD("Type %d candidate process was connected, pid: %d", i,
-							__candidate[i].pid);
-					}
-				} else {
-					__refuse_candidate_process(server_fd);
-					_E("Refused candidate process connection");
-				}
-			}
-
-			if ((pfds[CANDIDATE_TYPE + i].revents & (POLLHUP | POLLNVAL)) != 0) {
-				SECURE_LOGD("pfds[CANDIDATE_TYPE + %d].revents & (POLLHUP|POLLNVAL), pid: %d",
-					i, __candidate[i].pid);
-
-				if (pfds[CANDIDATE_TYPE + i].fd > -1)
-					close(pfds[CANDIDATE_TYPE + i].fd);
-
-				__candidate[i].pid = CANDIDATE_NONE;
-				__candidate[i].send_fd = -1;
-
-				pfds[CANDIDATE_TYPE + i].fd   = -1;
-				pfds[CANDIDATE_TYPE + i].events  = 0;
-				pfds[CANDIDATE_TYPE + i].revents = 0;
-			}
+			if ((pfds[CANDIDATE_TYPE + i].revents & (POLLHUP | POLLNVAL)) != 0)
+				__handle_loader_exception(pfds, i);
 		}
 	}
 
 	return 0;
 }
+
+static void __preload_candidate_process(struct pollfd *pfds)
+{
+	int i;
+
+	for (i = 0; i < LAUNCHPAD_TYPE_MAX; ++i) {
+		pfds[CANDIDATE_TYPE + i].fd   = -1;
+		pfds[CANDIDATE_TYPE + i].events  = 0;
+		pfds[CANDIDATE_TYPE + i].revents = 0;
+		__prepare_candidate_process(i);
+	}
+}
+
 
 int main(int argc, char **argv)
 {
@@ -832,6 +843,7 @@ int main(int argc, char **argv)
 			getpid(), errno, strerror_r(errno, err_str, sizeof(err_str)));
 	}
 #endif
+	__preload_candidate_process(pfds);
 	if (__loop_begin(pfds) == 0)
 		return 0;
 
