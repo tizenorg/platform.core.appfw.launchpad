@@ -306,6 +306,8 @@ static void __send_result_to_caller(int clifd, int ret, const char* app_path)
 static void __prepare_candidate_process(int type)
 {
 	int pid;
+	int max_fd;
+	int iter_fd;
 
 	__candidate[type].last_exec_time = time(NULL);
 	pid = fork();
@@ -318,6 +320,10 @@ static void __prepare_candidate_process(int type)
 		                "                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                ", NULL
 		               };
 		__signal_unblock_sigchld();
+
+		max_fd = sysconf(_SC_OPEN_MAX);
+		for (iter_fd = 0; iter_fd <= max_fd; iter_fd++)
+			close(iter_fd);
 
 		type_str[0] = '0' + type;
 		argv[1] = type_str;
@@ -377,7 +383,7 @@ static int __send_launchpad_loader(int type, app_pkt_t *pkt,
 
 	__send_result_to_caller(clifd, pid, app_path); //to AMD
 
-	__sleep_safe(1); //1 sec
+	/* __sleep_safe(1); */ /* 1 sec */
 	__prepare_candidate_process(type);
 
 	_D("Prepare another candidate process");
@@ -481,7 +487,7 @@ static int __launch_directly(const char *appid, const char *app_path, int clifd,
 		__signal_fini();
 
 		max_fd = sysconf(_SC_OPEN_MAX);
-		for (iter_fd = 3; iter_fd <= max_fd; iter_fd++)
+		for (iter_fd = 0; iter_fd <= max_fd; iter_fd++)
 			close(iter_fd);
 
 		snprintf(sock_path, UNIX_PATH_MAX, "/run/user/%d/%d", getuid(), getpid());
