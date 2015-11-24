@@ -377,7 +377,7 @@ static int __send_launchpad_loader(int type, app_pkt_t *pkt,
 
 	__send_result_to_caller(clifd, pid, app_path); //to AMD
 
-	__sleep_safe(1); //1 sec
+	/* __sleep_safe(1); */ /* 1 sec */
 	__prepare_candidate_process(type);
 
 	_D("Prepare another candidate process");
