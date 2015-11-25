@@ -16,7 +16,6 @@
 
 #define _GNU_SOURCE
 #include <stdio.h>
-#include <poll.h>
 #include <stdlib.h>
 #include <sys/prctl.h>
 #include <sys/socket.h>
@@ -29,6 +28,7 @@
 #include <time.h>
 #include <vconf.h>
 #include <systemd/sd-daemon.h>
+#include <glib.h>
 
 #include "perf.h"
 #include "launchpad_common.h"
@@ -46,25 +46,21 @@
 
 typedef struct {
 	int pid;
+	int effective_pid;
 	int send_fd;
 	int last_exec_time;
 } candidate;
 
-enum {
-	LAUNCH_PAD = 0,
-	POOL_TYPE = 1,
-	CANDIDATE_TYPE = LAUNCHPAD_TYPE_MAX + 1,
-	SIGCHLD_FD = LAUNCHPAD_TYPE_MAX * 2 + 1,
-	POLLFD_MAX = LAUNCHPAD_TYPE_MAX * 2 + 2
-};
+typedef struct {
+	GPollFD *gpollfd;
+	int type;
+} loader_context_t;
 
-static int initialized = 0;
 static candidate __candidate[LAUNCHPAD_TYPE_MAX] = {
-	{ CANDIDATE_NONE, -1, 0 },
-	{ CANDIDATE_NONE, -1, 0 }
+	{ CANDIDATE_NONE, CANDIDATE_NONE, -1, 0 },
+	{ CANDIDATE_NONE, CANDIDATE_NONE, -1, 0 },
+	{ CANDIDATE_NONE, CANDIDATE_NONE, -1, 0 }
 };
-static int launchpad_fd = -1;
-static int pool_fd[LAUNCHPAD_TYPE_MAX] = { -1, -1, -1 };
 
 static void __refuse_candidate_process(int server_fd)
 {
@@ -327,29 +323,18 @@ static void __prepare_candidate_process(int type)
 			_D("Succeeded to prepare candidate_process");
 
 		exit(-1);
+	} else {
+		__candidate[type].effective_pid = pid;
 	}
 }
 
-static void __sleep_safe(time_t sec)
+static gboolean __handle_preparing_candidate_process(gpointer user_data)
 {
-	struct timespec delay, remain;
-	delay.tv_sec = sec;
-	delay.tv_nsec = 0;
-	remain.tv_sec = 0;
-	remain.tv_nsec = 0;
+	int type = GPOINTER_TO_INT(user_data);
 
-	while (nanosleep(&delay, &remain)) {
-		if (errno == EINTR) {
-			delay.tv_sec = remain.tv_sec;
-			delay.tv_nsec = remain.tv_nsec;
-		} else {
-			char err_str[MAX_LOCAL_BUFSZ] = { 0, };
-
-			_D("nanosleep() failed, errno: %d (%s)", errno,
-				strerror_r(errno, err_str, sizeof(err_str)));
-			break;
-		}
-	}
+	__prepare_candidate_process(type);
+	_D("Prepare another candidate process");
+	return FALSE;
 }
 
 static int __send_launchpad_loader(int type, app_pkt_t *pkt,
@@ -370,6 +355,7 @@ static int __send_launchpad_loader(int type, app_pkt_t *pkt,
 	close(__candidate[type].send_fd);
 
 	__candidate[type].pid = CANDIDATE_NONE;
+	__candidate[type].effective_pid = CANDIDATE_NONE;
 	__candidate[type].send_fd = -1;
 
 	/* Temporary log: launch time checking */
@@ -377,10 +363,8 @@ static int __send_launchpad_loader(int type, app_pkt_t *pkt,
 
 	__send_result_to_caller(clifd, pid, app_path); //to AMD
 
-	/* __sleep_safe(1); */ /* 1 sec */
-	__prepare_candidate_process(type);
+	g_timeout_add(1000, __handle_preparing_candidate_process, GINT_TO_POINTER(type));
 
-	_D("Prepare another candidate process");
 	return pid;
 }
 
@@ -508,8 +492,107 @@ static int __launch_directly(const char *appid, const char *app_path, int clifd,
 	return pid;
 }
 
-static void __launchpad_main_loop(int launchpad_fd, int *pool_fd)
+static int __create_sock_activation(void)
 {
+	int fds;
+
+	fds = sd_listen_fds(0);
+	if (fds == 1)
+		return SD_LISTEN_FDS_START;
+	else if (fds > 1)
+		_E("Too many file descriptors received.\n");
+	else
+		_D("There is no socket stream");
+
+	return -1;
+}
+
+static int __launchpad_pre_init(int argc, char **argv)
+{
+	int fd;
+
+	/* signal init*/
+	__signal_init();
+
+	/* create launchpad sock */
+	fd = __create_sock_activation();
+	if (fd < 0) {
+		fd = _create_server_sock(PROCESS_POOL_LAUNCHPAD_SOCK);
+		if (fd < 0) {
+			_E("server sock error %d", fd);
+			return -1;
+		}
+	}
+
+	return fd;
+}
+
+static void __preload_candidate_process()
+{
+	int i;
+
+	for (i = 0; i < LAUNCHPAD_TYPE_MAX; ++i) {
+		__prepare_candidate_process(i);
+	}
+}
+
+static gboolean __handle_loader_event(gpointer data)
+{
+	loader_context_t *lc = (loader_context_t*) data;
+	int fd = lc->gpollfd->fd;
+	int type = lc->type;
+	int client_fd;
+	int client_pid;
+
+	if (__candidate[type].pid == CANDIDATE_NONE) {
+		if (__accept_candidate_process(fd, &client_fd, &client_pid) >= 0) {
+			__candidate[type].pid = client_pid;
+			__candidate[type].send_fd = client_fd;
+
+			SECURE_LOGD("Type %d candidate process was connected, pid: %d", type,
+					__candidate[type].pid);
+		}
+	} else {
+		__refuse_candidate_process(fd);
+		_E("Refused candidate process connection");
+	}
+
+	return TRUE;
+}
+
+static gboolean __handle_sigchild(gpointer data)
+{
+	GPollFD *gpollfd = (GPollFD *) data;
+	int fd = gpollfd->fd;
+	struct signalfd_siginfo siginfo;
+	ssize_t s;
+	int i;
+
+	do {
+		s = read(fd, &siginfo, sizeof(struct signalfd_siginfo));
+		if (s == 0)
+			break;
+
+		if (s != sizeof(struct signalfd_siginfo)) {
+			_E("error reading sigchld info");
+			break;
+		}
+		__launchpad_process_sigchld(&siginfo);
+
+		for (i = 0; i < LAUNCHPAD_TYPE_MAX; ++i) {
+			if (__candidate[i].effective_pid == siginfo.ssi_pid) {
+				__prepare_candidate_process(i);
+				break;
+			}
+		}
+	} while (s > 0);
+
+	return TRUE;
+}
+static gboolean __handle_launch_event(gpointer data)
+{
+	GPollFD *gpollfd = (GPollFD *) data;
+	int fd = gpollfd->fd;
 	bundle *kb = NULL;
 	app_pkt_t *pkt = NULL;
 	app_info_from_db *menu_info = NULL;
@@ -522,7 +605,7 @@ static void __launchpad_main_loop(int launchpad_fd, int *pool_fd)
 	struct ucred cr;
 	int type = -1;
 
-	pkt = _recv_pkt_raw(launchpad_fd, &clifd, &cr);
+	pkt = _recv_pkt_raw(fd, &clifd, &cr);
 	if (!pkt) {
 		_E("packet is NULL");
 		goto end;
@@ -615,214 +698,230 @@ end:
 	if (pkt != NULL)
 		free(pkt);
 
-	/* Active Flusing for Daemon */
-	if (initialized > AUL_POLL_CNT) {
-		malloc_trim(0);
-		initialized = 1;
-	}
+	return TRUE;
 }
 
-static int __create_sock_activation(void)
+static gboolean __au_glib_check(GSource *src)
 {
-	int fds;
+	GSList *fd_list;
+	GPollFD *tmp;
 
-	fds = sd_listen_fds(0);
-	if (fds == 1)
-		return SD_LISTEN_FDS_START;
-	else if (fds > 1)
-		_E("Too many file descriptors received.\n");
-	else
-		_D("There is no socket stream");
+	fd_list = src->poll_fds;
+	do {
+		tmp = (GPollFD *) fd_list->data;
+		if ((tmp->revents & (G_IO_IN | G_IO_PRI)))
+			return TRUE;
+		fd_list = fd_list->next;
+	} while (fd_list);
 
-	return -1;
+	return FALSE;
 }
 
-static int __launchpad_pre_init(int argc, char **argv)
+static gboolean __au_glib_dispatch(GSource *src, GSourceFunc callback,
+		gpointer data)
 {
-	int fd;
-
-	/* signal init*/
-	__signal_init();
-
-	/* create launchpad sock */
-	fd = __create_sock_activation();
-	if (fd < 0) {
-		fd = _create_server_sock(PROCESS_POOL_LAUNCHPAD_SOCK);
-		if (fd < 0) {
-			_E("server sock error %d", fd);
-			return -1;
-		}
-	}
-
-	return fd;
+	callback(data);
+	return TRUE;
 }
 
-static int __launchpad_post_init()
+static gboolean __au_glib_prepare(GSource *src, gint *timeout)
 {
-	/* Setting this as a global variable to keep track
-	of launchpad poll cnt */
-	/* static int initialized = 0;*/
-
-	if (initialized) {
-		++initialized;
-		return 0;
-	}
-
-	++initialized;
-
-	return 0;
+	return FALSE;
 }
 
-static int __init_pfds(struct pollfd *pfds, int argc, char **argv)
-{
-	int sigchld_fd = -1;
-	int i;
+static GSourceFuncs funcs = {
+	.prepare = __au_glib_prepare,
+	.check = __au_glib_check,
+	.dispatch = __au_glib_dispatch,
+	.finalize = NULL
+};
 
-	/* init without concerning X & EFL*/
+static int __init_launchpad_fd(int argc, char **argv)
+{
+	int r;
+	GPollFD *gpollfd;
+	GSource *src;
+	int launchpad_fd = -1;
+
 	launchpad_fd = __launchpad_pre_init(argc, argv);
 	if (launchpad_fd < 0) {
 		_E("launchpad pre init failed");
 		exit(-1);
 	}
-	pfds[LAUNCH_PAD].fd  = launchpad_fd;
-	pfds[LAUNCH_PAD].events  = POLLIN;
-	pfds[LAUNCH_PAD].revents = 0;
 
-	for (i = 0; i < LAUNCHPAD_TYPE_MAX; ++i) {
-		pool_fd[i] = __listen_candidate_process(i);
-		if (pool_fd[i] == -1) {
-			_E("[launchpad] Listening the socket to the type %d candidate process failed.",
-			   i);
-			return -1;
-		}
-		pfds[POOL_TYPE + i].fd   = pool_fd[i];
-		pfds[POOL_TYPE + i].events  = POLLIN;
-		pfds[POOL_TYPE + i].revents = 0;
+	src = g_source_new(&funcs, sizeof(GSource));
+	if (!src) {
+		_E("out of memory");
+		close(launchpad_fd);
+		return -1;
 	}
+
+	gpollfd = (GPollFD *) g_malloc(sizeof(GPollFD));
+	if (!gpollfd) {
+		_E("out of memory");
+		g_source_destroy(src);
+		close(launchpad_fd);
+		return -1;
+	}
+
+	gpollfd->events = G_IO_IN;
+	gpollfd->fd = launchpad_fd;
+
+	g_source_add_poll(src, gpollfd);
+	g_source_set_callback(src, (GSourceFunc) __handle_launch_event,
+			(gpointer) gpollfd, NULL);
+	g_source_set_priority(src, G_PRIORITY_DEFAULT);
+
+	r = g_source_attach(src, NULL);
+	if (r  == 0) {
+		g_free(gpollfd);
+		g_source_destroy(src);
+		close(launchpad_fd);
+		return -1;
+	}
+
+	return 0;
+}
+
+static int __init_sigchild_fd(void)
+{
+	int r;
+	int sigchld_fd = -1;
+	GPollFD *gpollfd;
+	GSource *src;
 
 	sigchld_fd = __signal_get_sigchld_fd();
 	if (sigchld_fd == -1) {
 		_E("failed to get sigchld fd");
 		return -1;
 	}
-	pfds[SIGCHLD_FD].fd = sigchld_fd;
-	pfds[SIGCHLD_FD].events = POLLIN;
-	pfds[SIGCHLD_FD].revents = 0;
+
+	src = g_source_new(&funcs, sizeof(GSource));
+	if (!src) {
+		_E("out of memory");
+		close(sigchld_fd);
+		return -1;
+	}
+
+	gpollfd = (GPollFD *) g_malloc(sizeof(GPollFD));
+	if (!gpollfd) {
+		_E("out of memory");
+		g_source_destroy(src);
+		close(sigchld_fd);
+		return -1;
+	}
+
+	gpollfd->events = G_IO_IN;
+	gpollfd->fd = sigchld_fd;
+
+	g_source_add_poll(src, gpollfd);
+	g_source_set_callback(src, (GSourceFunc)__handle_sigchild,
+			(gpointer) gpollfd, NULL);
+	g_source_set_priority(src, G_PRIORITY_DEFAULT);
+
+	r = g_source_attach(src, NULL);
+	if (r  == 0) {
+		g_free(gpollfd);
+		g_source_destroy(src);
+		close(sigchld_fd);
+		return -1;
+	}
 
 	return 0;
 }
 
-static int __loop_begin(struct pollfd *pfds)
+static int __init_loader_fds(void)
 {
+	int r;
 	int i;
 
-	while (1) {
-		for (i = 0; i < LAUNCHPAD_TYPE_MAX; ++i) {
-			if (__candidate[i].pid == CANDIDATE_NONE) {
-				pfds[CANDIDATE_TYPE + i].fd   = -1;
-				pfds[CANDIDATE_TYPE + i].events  = 0;
-				pfds[CANDIDATE_TYPE + i].revents = 0;
+	for (i = 0; i < LAUNCHPAD_TYPE_MAX; ++i) {
+		int loader_fd = -1;
+		GPollFD *gpollfd;
+		GSource *src;
 
-				if (DIFF(__candidate[i].last_exec_time, time(NULL)) > EXEC_CANDIDATE_EXPIRED)
-					__prepare_candidate_process(i);
-			}
+		loader_fd = __listen_candidate_process(i);
+		if (loader_fd == -1) {
+			_E("[launchpad] Listening the socket to the type %d candidate process failed.",
+			   i);
+			return -1;
 		}
-
-		if (poll(pfds, POLLFD_MAX, -1) < 0)
-			continue;
-
-		_D("pfds[LAUNCH_PAD].revent  : 0x%x", pfds[LAUNCH_PAD].revents) ;
-		for (i = 0; i < LAUNCHPAD_TYPE_MAX; ++i) {
-			_D("pfds[POOL_TYPE + %d].revents : 0x%x", i, pfds[POOL_TYPE + i].revents) ;
-			_D("pfds[CANDIDATE_TYPE + %d].revents : 0x%x", i,
-			   pfds[CANDIDATE_TYPE + i].revents);
-		}
-
-		/* init with concerning X & EFL (because of booting
-		* sequence problem)*/
-		if (__launchpad_post_init() < 0) {
-			_E("launcpad post init failed");
+		src = g_source_new(&funcs, sizeof(GSource));
+		if (!src) {
+			_E("out of memory");
+			close(loader_fd);
 			return -1;
 		}
 
-		if ((pfds[SIGCHLD_FD].revents & POLLIN) != 0) {
-			struct signalfd_siginfo siginfo;
-			ssize_t s;
-
-			do {
-				s = read(pfds[SIGCHLD_FD].fd, &siginfo, sizeof(struct signalfd_siginfo));
-				if (s == 0)
-					break;
-
-				if (s != sizeof(struct signalfd_siginfo)) {
-					_E("error reading sigchld info");
-					break;
-				}
-				__launchpad_process_sigchld(&siginfo);
-			} while (s > 0);
+		gpollfd = (GPollFD *) g_malloc(sizeof(GPollFD));
+		if (!gpollfd) {
+			_E("out of memory");
+			g_source_destroy(src);
+			close(loader_fd);
+			return -1;
 		}
 
-		if ((pfds[LAUNCH_PAD].revents & POLLIN) != 0) {
-			_D("pfds[LAUNCH_PAD].revents & POLLIN");
-			__launchpad_main_loop(pfds[LAUNCH_PAD].fd, pool_fd);
+		gpollfd->events = G_IO_IN;
+		gpollfd->fd = loader_fd;
+
+		loader_context_t *lc = malloc(sizeof(loader_context_t));
+		if (lc == NULL) {
+			g_free(gpollfd);
+			g_source_destroy(src);
+			close(loader_fd);
+			return -1;
 		}
 
-		for (i = 0; i < LAUNCHPAD_TYPE_MAX; ++i) {
-			if ((pfds[POOL_TYPE + i].revents & POLLIN) != 0) {
-				int server_fd, client_fd;
-				int client_pid;
+		lc->gpollfd = gpollfd;
+		lc->type = i;
 
-				server_fd = pfds[POOL_TYPE + i].fd;
+		g_source_add_poll(src, gpollfd);
+		g_source_set_callback(src, (GSourceFunc)__handle_loader_event,
+		                      (gpointer) lc, NULL);
+		g_source_set_priority(src, G_PRIORITY_DEFAULT);
 
-				_D("pfds[POOL_TYPE + %d].revents & POLLIN", i);
-
-				if (__candidate[i].pid == CANDIDATE_NONE) {
-					if (__accept_candidate_process(server_fd, &client_fd, &client_pid) >= 0) {
-						__candidate[i].pid = client_pid;
-						__candidate[i].send_fd = client_fd;
-
-						pfds[CANDIDATE_TYPE + i].fd   = client_fd;
-						pfds[CANDIDATE_TYPE + i].events  = POLLIN | POLLHUP;
-						pfds[CANDIDATE_TYPE + i].revents = 0;
-
-						SECURE_LOGD("Type %d candidate process was connected, pid: %d", i,
-							__candidate[i].pid);
-					}
-				} else {
-					__refuse_candidate_process(server_fd);
-					_E("Refused candidate process connection");
-				}
-			}
-
-			if ((pfds[CANDIDATE_TYPE + i].revents & (POLLHUP | POLLNVAL)) != 0) {
-				SECURE_LOGD("pfds[CANDIDATE_TYPE + %d].revents & (POLLHUP|POLLNVAL), pid: %d",
-					i, __candidate[i].pid);
-
-				if (pfds[CANDIDATE_TYPE + i].fd > -1)
-					close(pfds[CANDIDATE_TYPE + i].fd);
-
-				__candidate[i].pid = CANDIDATE_NONE;
-				__candidate[i].send_fd = -1;
-
-				pfds[CANDIDATE_TYPE + i].fd   = -1;
-				pfds[CANDIDATE_TYPE + i].events  = 0;
-				pfds[CANDIDATE_TYPE + i].revents = 0;
-			}
+		r = g_source_attach(src, NULL);
+		if (r  == 0) {
+			free(lc);
+			g_free(gpollfd);
+			g_source_destroy(src);
+			close(loader_fd);
+			return -1;
 		}
 	}
 
 	return 0;
 }
 
-int main(int argc, char **argv)
+static int __before_loop(int argc, char **argv)
 {
-	int i;
-	struct pollfd pfds[POLLFD_MAX];
+	if (__init_sigchild_fd() != 0) {
+		_E("__init_sigchild_fd() failed");
+		return -1;
+	}
 
-	memset(pfds, 0x00, sizeof(pfds));
-	if (__init_pfds(pfds, argc, argv) != 0)
-		goto error;
+	if (__init_launchpad_fd(argc, argv) != 0) {
+		_E("__init_launchpad_fd() failed");
+		return -1;
+	}
 
+	if (__init_loader_fds() != 0) {
+		_E("__init_loader_fds() failed");
+		return -1;
+	}
+
+	__preload_candidate_process();
+
+	return 0;
+}
+
+static void __after_loop(void)
+{
+
+}
+
+static void __set_priority(void)
+{
 #ifdef _APPFW_FEATURE_PRIORITY_CHANGE
 	int res = setpriority(PRIO_PROCESS, 0, -12);
 	if (res == -1) {
@@ -832,19 +931,26 @@ int main(int argc, char **argv)
 			getpid(), errno, strerror_r(errno, err_str, sizeof(err_str)));
 	}
 #endif
-	if (__loop_begin(pfds) == 0)
-		return 0;
+}
 
-error:
-	if (launchpad_fd != -1)
-		close(launchpad_fd);
+int main(int argc, char **argv)
+{
+	GMainLoop *mainloop = NULL;
 
-	for (i = 0; i < LAUNCHPAD_TYPE_MAX; ++i) {
-		if (pool_fd[i] != -1)
-			close(pool_fd[i]);
-		if (__candidate[i].send_fd != -1)
-			close(__candidate[i].send_fd);
+	mainloop = g_main_loop_new(NULL, FALSE);
+	if (!mainloop) {
+		_E("failed to create glib main loop");
+		return -1;
 	}
+
+	if (__before_loop(argc, argv) != 0) {
+		_E("process-pool Initialization failed!\n");
+		return -1;
+	}
+
+	__set_priority();
+	g_main_loop_run(mainloop);
+	__after_loop();
 
 	return -1;
 }
