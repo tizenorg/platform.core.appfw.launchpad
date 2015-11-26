@@ -50,6 +50,7 @@ typedef struct {
 	int send_fd;
 	int last_exec_time;
 	guint source;
+	guint timer;
 } candidate;
 
 typedef struct {
@@ -58,9 +59,9 @@ typedef struct {
 } loader_context_t;
 
 static candidate __candidate[LAUNCHPAD_TYPE_MAX] = {
-	{ CANDIDATE_NONE, CANDIDATE_NONE, -1, 0, 0 },
-	{ CANDIDATE_NONE, CANDIDATE_NONE, -1, 0, 0 },
-	{ CANDIDATE_NONE, CANDIDATE_NONE, -1, 0, 0 }
+	{ CANDIDATE_NONE, CANDIDATE_NONE, -1, 0, 0, 0 },
+	{ CANDIDATE_NONE, CANDIDATE_NONE, -1, 0, 0, 0 },
+	{ CANDIDATE_NONE, CANDIDATE_NONE, -1, 0, 0, 0 }
 };
 
 static void __refuse_candidate_process(int server_fd)
@@ -339,7 +340,7 @@ static gboolean __handle_preparing_candidate_process(gpointer user_data)
 }
 
 static int __send_launchpad_loader(int type, app_pkt_t *pkt,
-				const char *app_path, int clifd)
+				const char *app_path, int clifd, const char *comp_type)
 {
 	char sock_path[UNIX_PATH_MAX] = { 0, };
 	int pid = -1;
@@ -368,7 +369,10 @@ static int __send_launchpad_loader(int type, app_pkt_t *pkt,
 
 	__send_result_to_caller(clifd, pid, app_path); //to AMD
 
-	g_timeout_add(1000, __handle_preparing_candidate_process, GINT_TO_POINTER(type));
+	if (strcmp("uiapp", comp_type) == 0)
+		__candidate[type].timer = g_timeout_add(5000, __handle_preparing_candidate_process, GINT_TO_POINTER(type));
+	else
+		__candidate[type].timer = g_timeout_add(2000, __handle_preparing_candidate_process, GINT_TO_POINTER(type));
 
 	return pid;
 }
@@ -536,8 +540,15 @@ static void __preload_candidate_process()
 {
 	int i;
 
-	for (i = 0; i < LAUNCHPAD_TYPE_MAX; ++i)
-		__prepare_candidate_process(i);
+	for (i = 0; i < LAUNCHPAD_TYPE_MAX; ++i) {
+		if (__candidate[i].effective_pid == CANDIDATE_NONE) {
+			__prepare_candidate_process(i);
+			if (__candidate[i].timer > 0) {
+				g_source_remove(__candidate[i].timer);
+				__candidate[i].timer = 0;
+			}
+		}
+	}
 }
 
 static void __destroy_poll_data(gpointer data)
@@ -720,6 +731,7 @@ static gboolean __handle_launch_event(gpointer data)
 	const char *pkg_name = NULL;
 	const char *internal_pool = NULL;
 	const char *app_path = NULL;
+	char *comp_type = NULL;
 	int pid = -1;
 	int clifd = -1;
 	struct ucred cr;
@@ -734,6 +746,14 @@ static gboolean __handle_launch_event(gpointer data)
 	kb = bundle_decode(pkt->data, pkt->len);
 	if (!kb) {
 		_E("bundle decode error");
+		goto end;
+	}
+
+	if (pkt->cmd == PAD_CMD_VISIBILITY) {
+		_W("cmd visibility");
+		__preload_candidate_process();
+		__real_send(clifd, 0);
+		clifd = -1;
 		goto end;
 	}
 
@@ -767,7 +787,8 @@ static gboolean __handle_launch_event(gpointer data)
 	internal_pool = bundle_get_val(kb, AUL_K_EXEC);
 	SECURE_LOGD("exec : %s\n", internal_pool);
 	internal_pool = bundle_get_val(kb, AUL_K_INTERNAL_POOL);
-
+	comp_type = bundle_get_val(kb, AUL_K_COMP_TYPE);
+	SECURE_LOGD("comp_type : %s\n", comp_type);
 	SECURE_LOGD("internal pool : %s\n", internal_pool);
 	SECURE_LOGD("hwacc : %s\n", menu_info->hwacc);
 	type = __get_launchpad_type(internal_pool, menu_info->hwacc);
@@ -775,6 +796,8 @@ static gboolean __handle_launch_event(gpointer data)
 		_E("failed to get launchpad type");
 		goto end;
 	}
+	if (comp_type)
+		comp_type = strdup(comp_type);
 
 	_modify_bundle(kb, cr.pid, menu_info, pkt->cmd);
 	pkg_name = _get_pkgname(menu_info);
@@ -789,12 +812,12 @@ static gboolean __handle_launch_event(gpointer data)
 		&& (__candidate[type].pid != CANDIDATE_NONE)
 		&& (DIFF(__candidate[type].last_exec_time, time(NULL)) > EXEC_CANDIDATE_WAIT)) {
 		_W("Launch on type-based process-pool");
-		pid = __send_launchpad_loader(type, pkt, app_path, clifd);
+		pid = __send_launchpad_loader(type, pkt, app_path, clifd, comp_type);
 	} else if ((__candidate[LAUNCHPAD_TYPE_COMMON].pid != CANDIDATE_NONE)
 		&& (DIFF(__candidate[LAUNCHPAD_TYPE_COMMON].last_exec_time,
 		time(NULL)) > EXEC_CANDIDATE_WAIT)) {
 		_W("Launch on common type process-pool");
-		pid = __send_launchpad_loader(LAUNCHPAD_TYPE_COMMON, pkt, app_path, clifd);
+		pid = __send_launchpad_loader(LAUNCHPAD_TYPE_COMMON, pkt, app_path, clifd, comp_type);
 	} else {
 		_W("Candidate is not prepared");
 		pid = __launch_directly(pkg_name, app_path, clifd, kb, menu_info);
@@ -817,6 +840,8 @@ end:
 		bundle_free(kb);
 	if (pkt != NULL)
 		free(pkt);
+	if (comp_type)
+		free(comp_type);
 
 	return G_SOURCE_CONTINUE;
 }

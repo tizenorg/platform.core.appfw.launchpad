@@ -372,10 +372,6 @@ API int launchpad_loader_main(int argc, char **argv,
 	__argc = argc;
 	__argv = argv;
 
-	//temp - this requires some optimization.
-	sleep(1);
-	_D("sleeping 1 sec...");
-
 	if (__before_loop(argc, argv) != 0)
 		return -1;
 

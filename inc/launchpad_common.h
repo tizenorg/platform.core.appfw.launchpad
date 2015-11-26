@@ -40,6 +40,9 @@
 #define MAX_LOCAL_BUFSZ 128
 #define AUL_SOCK_MAXBUFF 65535
 
+#define PAD_CMD_LAUNCH		0
+#define PAD_CMD_VISIBILITY	10
+
 #define _E(fmt, arg...) LOGE(fmt, ##arg)
 #define _D(fmt, arg...) LOGD(fmt, ##arg)
 #define _W(fmt, arg...) LOGW(fmt, ##arg)

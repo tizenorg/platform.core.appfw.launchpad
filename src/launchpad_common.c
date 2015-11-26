@@ -44,11 +44,6 @@
 #define CONNECT_RETRY_COUNT 3
 #define AUL_PKT_HEADER_SIZE (sizeof(int) + sizeof(int))
 
-#define APP_START  0
-#define APP_OPEN  1
-#define APP_RESUME 2
-#define APP_START_RES 3
-
 static int __read_proc(const char *path, char *buf, int size)
 {
 	int fd;
@@ -409,10 +404,10 @@ void _modify_bundle(bundle * kb, int caller_pid, app_info_from_db * menu_info, i
 	bundle_del(kb, AUL_K_HWACC);
 	bundle_del(kb, AUL_K_TASKMANAGE);
 	bundle_del(kb, AUL_K_PKGID);
+	bundle_del(kb, AUL_K_COMP_TYPE);
 
 	/* Parse app_path to retrieve default bundle*/
-	if (cmd == APP_START || cmd == APP_START_RES || cmd == APP_OPEN
-		|| cmd == APP_RESUME) {
+	if (cmd == PAD_CMD_LAUNCH) {
 		char *ptr;
 		char exe[MAX_PATH_LEN];
 		int flag;
