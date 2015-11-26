@@ -32,6 +32,7 @@ extern "C" {
 #define AUL_K_PKGID     "__AUL_PKGID_"
 #define AUL_K_DEBUG	"__AUL_DEBUG__"
 #define AUL_K_PRIVACY_APPID		"__AUL_PRIVACY_APPID__"
+#define AUL_K_COMP_TYPE		"__AUL_COMP_TYPE__"
 
 #ifdef __cplusplus
 }

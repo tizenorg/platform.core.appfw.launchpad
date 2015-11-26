@@ -27,6 +27,7 @@
 #include "launchpad_common.h"
 #include "key.h"
 
+#define MAX_PATH_LEN	1024
 #define BINSH_NAME  "/bin/sh"
 #define BINSH_SIZE  7
 #define VALGRIND_NAME   "/home/developer/sdk_tools/valgrind/usr/bin/valgrind"
@@ -43,11 +44,6 @@
 #define CONNECT_RETRY_TIME 100 * 1000
 #define CONNECT_RETRY_COUNT 3
 #define AUL_PKT_HEADER_SIZE (sizeof(int) + sizeof(int))
-
-#define APP_START  0
-#define APP_OPEN  1
-#define APP_RESUME 2
-#define APP_START_RES 3
 
 static int __read_proc(const char *path, char *buf, int size)
 {
@@ -365,16 +361,18 @@ char *_proc_get_cmdline_bypid(int pid)
 	return strdup(buf);
 }
 
-app_info_from_db *_get_app_info_from_bundle_by_pkgname(const char *pkgname, bundle *kb)
+appinfo_t* _appinfo_create(bundle *kb)
 {
-	app_info_from_db *menu_info;
+	appinfo_t *menu_info;
 	const char *ptr = NULL;
 
-	menu_info = calloc(1, sizeof(app_info_from_db));
+	menu_info = calloc(1, sizeof(appinfo_t));
 	if (menu_info == NULL)
 		return NULL;
 
-	menu_info->pkg_name = strdup(pkgname);
+	ptr = bundle_get_val(kb, AUL_K_APPID);
+	if (ptr)
+		menu_info->appid = strdup(ptr);
 	ptr = bundle_get_val(kb, AUL_K_EXEC);
 	if (ptr)
 		menu_info->app_path = strdup(ptr);
@@ -391,17 +389,81 @@ app_info_from_db *_get_app_info_from_bundle_by_pkgname(const char *pkgname, bund
 		menu_info->taskmanage = strdup(ptr);
 	ptr = bundle_get_val(kb, AUL_K_PKGID);
 	if (ptr)
-		menu_info->pkg_id = strdup(ptr);
+		menu_info->pkgid = strdup(ptr);
+	ptr = bundle_get_val(kb, AUL_K_COMP_TYPE);
+	if (ptr)
+		menu_info->comp_type = strdup(ptr);
+	ptr = bundle_get_val(kb, AUL_K_INTERNAL_POOL);
+	if (ptr)
+		menu_info->internal_pool = strdup(ptr);
 
-	if (!_get_app_path(menu_info)) {
-		_free_app_info_from_db(menu_info);
+	if (!_appinfo_get_app_path(menu_info)) {
+		_appinfo_free(menu_info);
 		return NULL;
 	}
 
 	return menu_info;
 }
 
-void _modify_bundle(bundle * kb, int caller_pid, app_info_from_db * menu_info, int cmd)
+char *_appinfo_get_app_path(appinfo_t *menu_info)
+{
+	int i = 0;
+	int path_len = -1;
+
+	if (!menu_info || menu_info->app_path == NULL)
+		return NULL;
+
+	while (menu_info->app_path[i] != 0) {
+		if (menu_info->app_path[i] == ' '
+		    || menu_info->app_path[i] == '\t') {
+			path_len = i;
+			break;
+		}
+		i++;
+	}
+
+	if (path_len == 0) {
+		free(menu_info->app_path);
+		menu_info->app_path = NULL;
+	} else if (path_len > 0) {
+		char *tmp_app_path = malloc(sizeof(char) * (path_len + 1));
+		if(tmp_app_path == NULL)
+			return NULL;
+		snprintf(tmp_app_path, path_len + 1, "%s", menu_info->app_path);
+		free(menu_info->app_path);
+		menu_info->app_path = tmp_app_path;
+	}
+
+	return menu_info->app_path;
+}
+
+void _appinfo_free(appinfo_t *menu_info)
+{
+	if (menu_info != NULL) {
+		if (menu_info->appid != NULL)
+			free(menu_info->appid);
+		if (menu_info->app_path != NULL)
+			free(menu_info->app_path);
+		if (menu_info->original_app_path != NULL)
+			free(menu_info->original_app_path);
+		if (menu_info->pkg_type != NULL)
+			free(menu_info->pkg_type);
+		if (menu_info->hwacc != NULL)
+			free(menu_info->hwacc);
+		if (menu_info->taskmanage != NULL)
+			free(menu_info->taskmanage);
+		if (menu_info->pkgid != NULL)
+			free(menu_info->pkgid);
+		if (menu_info->comp_type != NULL)
+			free(menu_info->comp_type);
+		if (menu_info->internal_pool != NULL)
+			free(menu_info->internal_pool);
+
+		free(menu_info);
+	}
+}
+
+void _modify_bundle(bundle * kb, int caller_pid, appinfo_t *menu_info, int cmd)
 {
 	bundle_del(kb, AUL_K_APPID);
 	bundle_del(kb, AUL_K_EXEC);
@@ -409,15 +471,16 @@ void _modify_bundle(bundle * kb, int caller_pid, app_info_from_db * menu_info, i
 	bundle_del(kb, AUL_K_HWACC);
 	bundle_del(kb, AUL_K_TASKMANAGE);
 	bundle_del(kb, AUL_K_PKGID);
+	bundle_del(kb, AUL_K_COMP_TYPE);
+	bundle_del(kb, AUL_K_INTERNAL_POOL);
 
 	/* Parse app_path to retrieve default bundle*/
-	if (cmd == APP_START || cmd == APP_START_RES || cmd == APP_OPEN
-		|| cmd == APP_RESUME) {
+	if (cmd == PAD_CMD_LAUNCH) {
 		char *ptr;
 		char exe[MAX_PATH_LEN];
 		int flag;
 
-		ptr = _get_original_app_path(menu_info);
+		ptr = menu_info->original_app_path;
 
 		flag = __parse_app_path(ptr, exe, sizeof(exe));
 		if (flag > 0) {
@@ -499,7 +562,7 @@ error:
 	return -1;
 }
 
-void _set_env(app_info_from_db * menu_info, bundle * kb)
+void _set_env(appinfo_t *menu_info, bundle * kb)
 {
 	const char *str;
 
