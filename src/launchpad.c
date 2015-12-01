@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <sys/prctl.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
@@ -130,7 +131,7 @@ static int __listen_candidate_process(int type)
 
 	memset(&addr, 0x00, sizeof(struct sockaddr_un));
 	addr.sun_family = AF_UNIX;
-	snprintf(addr.sun_path, UNIX_PATH_MAX, "%s/%d/%s%d", SOCKET_PATH, getuid(),
+	snprintf(addr.sun_path, sizeof(addr.sun_path), "%s/%d/%s%d", SOCKET_PATH, getuid(),
 		LAUNCHPAD_LOADER_SOCKET_NAME, type);
 
 	fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
@@ -238,6 +239,7 @@ static void __send_result_to_caller(int clifd, int ret, const char* app_path)
 	int cmdline_changed = 0;
 	int cmdline_exist = 0;
 	int r;
+	char sock_path[MAX_LOCAL_BUFSZ];
 
 	_W("Check app launching");
 
@@ -265,8 +267,7 @@ static void __send_result_to_caller(int clifd, int ret, const char* app_path)
 			free(cmdline);
 			cmdline_changed = 1;
 
-			char sock_path[UNIX_PATH_MAX] = { 0, };
-			snprintf(sock_path, UNIX_PATH_MAX, "/run/user/%d/%d", getuid(), ret);
+			snprintf(sock_path, sizeof(sock_path), "/run/user/%d/%d", getuid(), ret);
 			if (access(sock_path, F_OK) == 0)
 				break;
 
@@ -337,10 +338,10 @@ static gboolean __handle_preparing_candidate_process(gpointer user_data)
 static int __send_launchpad_loader(int type, app_pkt_t *pkt,
 				const char *app_path, int clifd)
 {
-	char sock_path[UNIX_PATH_MAX] = { 0, };
+	char sock_path[MAX_LOCAL_BUFSZ];
 	int pid = -1;
 
-	snprintf(sock_path, UNIX_PATH_MAX, "/run/user/%d/%d", getuid(),
+	snprintf(sock_path, sizeof(sock_path), "/run/user/%d/%d", getuid(),
 		__candidate[type].pid);
 	unlink(sock_path);
 
@@ -453,7 +454,7 @@ static int __prepare_exec(const char *appId, const char *app_path,
 static int __launch_directly(const char *appid, const char *app_path, int clifd,
 				bundle* kb, app_info_from_db *menu_info)
 {
-	char sock_path[UNIX_PATH_MAX] = {0,};
+	char sock_path[MAX_LOCAL_BUFSZ];
 	int pid = fork();
 	int max_fd;
 	int iter_fd;
@@ -469,7 +470,7 @@ static int __launch_directly(const char *appid, const char *app_path, int clifd,
 		for (iter_fd = 3; iter_fd <= max_fd; iter_fd++)
 			close(iter_fd);
 
-		snprintf(sock_path, UNIX_PATH_MAX, "/run/user/%d/%d", getuid(), getpid());
+		snprintf(sock_path, sizeof(sock_path), "/run/user/%d/%d", getuid(), getpid());
 		unlink(sock_path);
 
 		PERF("prepare exec - first done");

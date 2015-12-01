@@ -17,15 +17,13 @@
 #ifndef __LAUNCHPAD_COMMON__
 #define __LAUNCHPAD_COMMON__
 
+#define _GNU_SOURCE
+
 #include <unistd.h>
 #include <ctype.h>
 #include <dlog.h>
 #include <bundle_internal.h>
-#ifndef __USE_GNU
-	#define __USE_GNU
-#endif
 #include <sys/socket.h>
-#include <linux/un.h>
 
 #include "menu_db_util.h"
 

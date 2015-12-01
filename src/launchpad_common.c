@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#define _GNU_SOURCE
+
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -23,6 +25,8 @@
 #include <stdio.h>
 #include <sys/xattr.h>
 #include <errno.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 
 #include "launchpad_common.h"
 #include "key.h"
@@ -195,7 +199,7 @@ int _create_server_sock(const char *name)
 
 	memset(&saddr, 0, sizeof(saddr));
 	saddr.sun_family = AF_UNIX;
-	snprintf(saddr.sun_path, UNIX_PATH_MAX, "/run/user/%d/%s", getuid(), name);
+	snprintf(saddr.sun_path, sizeof(saddr.sun_path), "/run/user/%d/%s", getuid(), name);
 	unlink(saddr.sun_path);
 
 	if (bind(fd, (struct sockaddr *)&saddr, sizeof(saddr)) < 0) {
@@ -466,7 +470,7 @@ int _connect_to_launchpad(int type)
 
 	memset(&addr, 0x00, sizeof(struct sockaddr_un));
 	addr.sun_family = AF_UNIX;
-	snprintf(addr.sun_path, UNIX_PATH_MAX, "%s/%d/%s%d", SOCKET_PATH, getuid(),
+	snprintf(addr.sun_path, sizeof(addr.sun_path), "%s/%d/%s%d", SOCKET_PATH, getuid(),
 		LAUNCHPAD_LOADER_SOCKET_NAME, type);
 
 	_D("connect to %s", addr.sun_path);
