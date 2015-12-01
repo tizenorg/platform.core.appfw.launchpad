@@ -303,17 +303,13 @@ static void __send_result_to_caller(int clifd, int ret, const char* app_path)
 static void __prepare_candidate_process(int type)
 {
 	int pid;
+	char type_str[2] = {0, };
+	char *argv[] = {"/usr/bin/launchpad-loader", NULL, NULL};
 
 	__candidate[type].last_exec_time = time(NULL);
 	pid = fork();
 
 	if (pid == 0) { /* child */
-		char type_str[2] = {0,};
-
-		/* execute with very long (1024 bytes) argument in order to prevent argv overflow caused by dlopen */
-		char *argv[] = {"/usr/bin/launchpad-loader", NULL,
-		                "                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                ", NULL
-		               };
 		__signal_unblock_sigchld();
 
 		type_str[0] = '0' + type;
