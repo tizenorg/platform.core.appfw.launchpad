@@ -24,7 +24,6 @@
 #include <bundle_internal.h>
 #include <aul.h>
 
-#include "menu_db_util.h"
 #include "launchpad_common.h"
 #include "preload.h"
 #include "process_pool_preload.h"

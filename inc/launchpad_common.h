@@ -25,8 +25,6 @@
 #include <bundle_internal.h>
 #include <sys/socket.h>
 
-#include "menu_db_util.h"
-
 #ifdef LAUNCHPAD_LOG
 #undef LOG_TAG
 #define LOG_TAG "LAUNCHPAD"
@@ -37,6 +35,9 @@
 #define MAX_PENDING_CONNECTIONS 10
 #define MAX_LOCAL_BUFSZ 128
 #define AUL_SOCK_MAXBUFF 65535
+
+#define PAD_CMD_LAUNCH		0
+#define PAD_CMD_VISIBILITY	10
 
 #define _E(fmt, arg...) LOGE(fmt, ##arg)
 #define _D(fmt, arg...) LOGD(fmt, ##arg)
@@ -63,15 +64,30 @@ typedef struct _app_pkt_t {
 	unsigned char data[1];
 } app_pkt_t;
 
+typedef struct {
+	char *appid;
+	char *app_path;
+	char *original_app_path;
+	char *pkg_type;
+	char *hwacc;
+	char *taskmanage;
+	char *pkgid;
+	char *comp_type;
+	char *internal_pool;
+} appinfo_t;
+
 char *_proc_get_cmdline_bypid(int pid);
-app_info_from_db *_get_app_info_from_bundle_by_pkgname(const char *pkgname, bundle *kb);
-void _modify_bundle(bundle * kb, int caller_pid, app_info_from_db * menu_info, int cmd);
+void _modify_bundle(bundle * kb, int caller_pid, appinfo_t *menu_info, int cmd);
 
 int _create_server_sock(const char *name);
 app_pkt_t *_recv_pkt_raw(int fd, int *clifd, struct ucred *cr);
 int _send_pkt_raw(int client_fd, app_pkt_t *pkt);
 int  _connect_to_launchpad(int type);
-void _set_env(app_info_from_db * menu_info, bundle * kb);
+void _set_env(appinfo_t *menu_info, bundle * kb);
 char** _create_argc_argv(bundle * kb, int *margc);
+
+appinfo_t* _appinfo_create(bundle *kb);
+void _appinfo_free(appinfo_t *menu_info);
+char *_appinfo_get_app_path(appinfo_t *menu_info);
 
 #endif

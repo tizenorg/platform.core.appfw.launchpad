@@ -132,10 +132,8 @@ static int __candidate_process_launchpad_main_loop(app_pkt_t* pkt,
 	char* out_app_path, int* out_argc, char ***out_argv, int type)
 {
 	bundle *kb = NULL;
-	app_info_from_db *menu_info = NULL;
-	const char *app_id = NULL;
+	appinfo_t *menu_info = NULL;
 	const char *app_path = NULL;
-	const char *pkg_id = NULL;
 	int tmp_argc = 0;
 	char **tmp_argv = NULL;
 	int ret = -1;
@@ -152,15 +150,14 @@ static int __candidate_process_launchpad_main_loop(app_pkt_t* pkt,
 	__bundle = kb;
 	atexit(__at_exit_to_release_bundle);
 
-	app_id = bundle_get_val(kb, AUL_K_APPID);
-	if (app_id == NULL) {
-		_E("Unable to get app_id");
+	menu_info = _appinfo_create(kb);
+	if (menu_info == NULL) {
+		_D("such pkg no found");
 		exit(-1);
 	}
 
-	menu_info = _get_app_info_from_bundle_by_pkgname(app_id, kb);
-	if (menu_info == NULL) {
-		_D("such pkg no found");
+	if (menu_info->appid == NULL) {
+		_E("Unable to get app_id");
 		exit(-1);
 	}
 
@@ -169,9 +166,9 @@ static int __candidate_process_launchpad_main_loop(app_pkt_t* pkt,
 		exit(-1);
 	}
 
-	SECURE_LOGD("app id: %s, launchpad type: %d", app_id, type);
+	SECURE_LOGD("app id: %s, launchpad type: %d", menu_info->appid, type);
 
-	app_path = _get_app_path(menu_info);
+	app_path = _appinfo_get_app_path(menu_info);
 	if (app_path == NULL) {
 		_E("app_path is NULL");
 		exit(-1);
@@ -184,27 +181,20 @@ static int __candidate_process_launchpad_main_loop(app_pkt_t* pkt,
 
 	_modify_bundle(kb, /*cr.pid - unused parameter*/ 0, menu_info, pkt->cmd);
 
-	app_id = _get_pkgname(menu_info);
-	if (app_id == NULL) {
-		_E("unable to get app_id from menu_info");
-		exit(-1);
-	}
-	SECURE_LOGD("app id: %s", app_id);
-	__appid = strdup(app_id);
+	__appid = strdup(menu_info->appid);
 	if (__appid == NULL) {
 		_E("Out of memory");
 		exit(-1);
 	}
 	aul_set_preinit_appid(__appid);
 
-	pkg_id = _get_pkgid(menu_info);
-	if (pkg_id == NULL) {
+	if (menu_info->pkgid == NULL) {
 		_E("unable to get pkg_id from menu_info");
 		exit(-1);
 	}
-	SECURE_LOGD("pkg id: %s", pkg_id);
+	SECURE_LOGD("pkg id: %s", menu_info->pkgid);
 
-	__pkgid = strdup(pkg_id);
+	__pkgid = strdup(menu_info->pkgid);
 	if (__pkgid == NULL) {
 		_E("Out of memory");
 		exit(-1);
@@ -240,7 +230,7 @@ static int __candidate_process_launchpad_main_loop(app_pkt_t* pkt,
 		exit(-1);
 
 	if (menu_info != NULL)
-		_free_app_info_from_db(menu_info);
+		_appinfo_free(menu_info);
 
 	return ret;
 }
@@ -371,10 +361,6 @@ API int launchpad_loader_main(int argc, char **argv,
 	__loader_user_data = user_data;
 	__argc = argc;
 	__argv = argv;
-
-	//temp - this requires some optimization.
-	sleep(1);
-	_D("sleeping 1 sec...");
 
 	if (__before_loop(argc, argv) != 0)
 		return -1;
