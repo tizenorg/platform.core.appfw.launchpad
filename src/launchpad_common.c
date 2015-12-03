@@ -515,7 +515,7 @@ void _modify_bundle(bundle * kb, int caller_pid, appinfo_t *menu_info, int cmd)
 	}
 }
 
-int _connect_to_launchpad(int type)
+int _connect_to_launchpad(int type, int associated_pid)
 {
 	struct sockaddr_un addr;
 	int fd = -1;
@@ -533,8 +533,8 @@ int _connect_to_launchpad(int type)
 
 	memset(&addr, 0x00, sizeof(struct sockaddr_un));
 	addr.sun_family = AF_UNIX;
-	snprintf(addr.sun_path, sizeof(addr.sun_path), "%s/%d/%s%d", SOCKET_PATH, getuid(),
-		LAUNCHPAD_LOADER_SOCKET_NAME, type);
+	snprintf(addr.sun_path, sizeof(addr.sun_path), "%s/%d/%s%d-%d", SOCKET_PATH, getuid(),
+		LAUNCHPAD_LOADER_SOCKET_NAME, type, associated_pid);
 
 	_D("connect to %s", addr.sun_path);
 	while (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {

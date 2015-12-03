@@ -5,6 +5,10 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/prctl.h>
+#ifdef _APPFW_FEATURE_LOADER_PRIORITY
+#include <sys/time.h>
+#include <sys/resource.h>
+#endif
 #include <bundle_internal.h>
 #include <aul.h>
 #include <security-manager.h>
@@ -29,6 +33,7 @@ static bundle *__bundle;
 static char *__appid;
 static char *__pkgid;
 static int __loader_type = LAUNCHPAD_TYPE_UNSUPPORTED;
+static int __associated_pid;
 
 static void __at_exit_to_release_bundle()
 {
@@ -275,13 +280,13 @@ static int __before_loop(int argc, char **argv)
 	int client_fd;
 	int ret = -1;
 
-	client_fd = _connect_to_launchpad(__loader_type);
+	client_fd = _connect_to_launchpad(__loader_type, __associated_pid);
 	if (client_fd == -1) {
 		_D("Connecting to candidate process was failed.");
 		return -1;
 	}
 
-#ifdef _APPFW_FEATURE_BOOST_PRIORITY
+#ifdef _APPFW_FEATURE_LOADER_PRIORITY
 	int res = setpriority(PRIO_PROCESS, 0, LOWEST_PRIO);
 
 	if (res == -1) {
@@ -304,7 +309,7 @@ static int __before_loop(int argc, char **argv)
 		ret = 0;
 	}
 
-#ifdef _APPFW_FEATURE_BOOST_PRIORITY
+#ifdef _APPFW_FEATURE_LOADER_PRIORITY
 	res = setpriority(PRIO_PGRP, 0, 0);
 	if (res == -1) {
 		char err_str[MAX_LOCAL_BUFSZ] = { 0, };
@@ -329,7 +334,7 @@ API int launchpad_loader_main(int argc, char **argv,
 				loader_lifecycle_callback_s *callbacks, loader_adapter_s *adapter,
 				void *user_data)
 {
-	if (argc < 2) {
+	if (argc < 3) {
 		_E("too few argument.");
 		return -1;
 	}
@@ -339,6 +344,8 @@ API int launchpad_loader_main(int argc, char **argv,
 		_E("invalid argument. (type: %d)", __loader_type);
 		return -1;
 	}
+
+	__associated_pid = atoi(argv[2]);
 
 	if (callbacks == NULL) {
 		_E("invalid argument. callback is null");
