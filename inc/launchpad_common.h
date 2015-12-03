@@ -38,6 +38,8 @@
 
 #define PAD_CMD_LAUNCH		0
 #define PAD_CMD_VISIBILITY	10
+#define PAD_CMD_ADD_LOADER	11
+#define PAD_CMD_REMOVE_LOADER	12
 
 #define _E(fmt, arg...) LOGE(fmt, ##arg)
 #define _D(fmt, arg...) LOGD(fmt, ##arg)
@@ -82,7 +84,7 @@ void _modify_bundle(bundle * kb, int caller_pid, appinfo_t *menu_info, int cmd);
 int _create_server_sock(const char *name);
 app_pkt_t *_recv_pkt_raw(int fd, int *clifd, struct ucred *cr);
 int _send_pkt_raw(int client_fd, app_pkt_t *pkt);
-int  _connect_to_launchpad(int type);
+int  _connect_to_launchpad(int type, int id);
 void _set_env(appinfo_t *menu_info, bundle * kb);
 char** _create_argc_argv(bundle * kb, int *margc);
 
