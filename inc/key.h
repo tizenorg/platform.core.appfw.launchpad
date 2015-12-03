@@ -33,6 +33,9 @@ extern "C" {
 #define AUL_K_DEBUG	"__AUL_DEBUG__"
 #define AUL_K_PRIVACY_APPID		"__AUL_PRIVACY_APPID__"
 #define AUL_K_COMP_TYPE		"__AUL_COMP_TYPE__"
+#define AUL_K_CALLER_PID	"__AUL_CALLER_PID__"
+#define AUL_K_LOADER_ID		"__AUL_LOADER_ID__"
+#define AUL_K_LOADER_PATH	"__AUL_LOADER_PATH__"
 
 #ifdef __cplusplus
 }
