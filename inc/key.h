@@ -33,6 +33,8 @@ extern "C" {
 #define AUL_K_DEBUG	"__AUL_DEBUG__"
 #define AUL_K_PRIVACY_APPID		"__AUL_PRIVACY_APPID__"
 #define AUL_K_COMP_TYPE		"__AUL_COMP_TYPE__"
+#define AUL_K_ASSOCIATED_PID	"__AUL_K_ASSOCIATED_PID__"
+#define AUL_K_ADD_SLOT		"__AUL_K_ADD_SLOT__"
 
 #ifdef __cplusplus
 }

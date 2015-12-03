@@ -29,6 +29,7 @@ static bundle *__bundle;
 static char *__appid;
 static char *__pkgid;
 static int __loader_type = LAUNCHPAD_TYPE_UNSUPPORTED;
+static int __associated_pid;
 
 static void __at_exit_to_release_bundle()
 {
@@ -275,7 +276,7 @@ static int __before_loop(int argc, char **argv)
 	int client_fd;
 	int ret = -1;
 
-	client_fd = _connect_to_launchpad(__loader_type);
+	client_fd = _connect_to_launchpad(__loader_type, __associated_pid);
 	if (client_fd == -1) {
 		_D("Connecting to candidate process was failed.");
 		return -1;
@@ -329,7 +330,7 @@ API int launchpad_loader_main(int argc, char **argv,
 				loader_lifecycle_callback_s *callbacks, loader_adapter_s *adapter,
 				void *user_data)
 {
-	if (argc < 2) {
+	if (argc < 3) {
 		_E("too few argument.");
 		return -1;
 	}
@@ -339,6 +340,8 @@ API int launchpad_loader_main(int argc, char **argv,
 		_E("invalid argument. (type: %d)", __loader_type);
 		return -1;
 	}
+
+	__associated_pid = atoi(argv[2]);
 
 	if (callbacks == NULL) {
 		_E("invalid argument. callback is null");
