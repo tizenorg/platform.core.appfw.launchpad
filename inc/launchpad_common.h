@@ -82,7 +82,7 @@ void _modify_bundle(bundle * kb, int caller_pid, appinfo_t *menu_info, int cmd);
 int _create_server_sock(const char *name);
 app_pkt_t *_recv_pkt_raw(int fd, int *clifd, struct ucred *cr);
 int _send_pkt_raw(int client_fd, app_pkt_t *pkt);
-int  _connect_to_launchpad(int type);
+int  _connect_to_launchpad(int type, int associated_pid);
 void _set_env(appinfo_t *menu_info, bundle * kb);
 char** _create_argc_argv(bundle * kb, int *margc);
 
