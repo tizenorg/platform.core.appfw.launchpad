@@ -162,15 +162,13 @@ static Eina_Bool __process_fd_handler(void* data, Ecore_Fd_Handler *handler)
 		exit(-1);
 	}
 
-	if (ecore_main_fd_handler_active_get(handler, ECORE_FD_ERROR)) {
-		_D("[candidate] ECORE_FD_ERROR");
-		close(fd);
-		exit(-1);
-	}
-
 	if (ecore_main_fd_handler_active_get(handler, ECORE_FD_READ)) {
 		if (__receiver)
 			__receiver(fd);
+	} else if (ecore_main_fd_handler_active_get(handler, ECORE_FD_ERROR)) {
+		_D("[candidate] ECORE_FD_ERROR");
+		close(fd);
+		exit(-1);
 	}
 
 	return ECORE_CALLBACK_CANCEL;
