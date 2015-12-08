@@ -46,6 +46,7 @@
 #define CANDIDATE_NONE 0
 #define PROCESS_POOL_LAUNCHPAD_SOCK ".launchpad-process-pool-sock"
 #define LOADER_PATH_DEFAULT "/usr/bin/launchpad-loader"
+#define LOADER_PATH_WRT		"/usr/bin/wrt-loader"
 
 typedef struct {
 	int type;
@@ -271,8 +272,13 @@ static int __set_access(const char* appId, const char* pkg_type,
 	return security_manager_prepare_app(appId) == SECURITY_MANAGER_SUCCESS ? 0 : -1;
 }
 
-static int __get_launchpad_type(const char* internal_pool, const char* hwacc)
+static int __get_launchpad_type(const char* internal_pool, const char* hwacc, const char *pkg_type)
 {
+	if (pkg_type && strncmp(pkg_type, "wgt", 3) == 0) {
+		_D("[launchpad] launchpad type: wrt");
+		return LAUNCHPAD_TYPE_WRT;
+	}
+
 	if (internal_pool && strncmp(internal_pool, "true", 4) == 0 && hwacc) {
 		if (strncmp(hwacc, "NOT_USE", 7) == 0) {
 			_D("[launchpad] launchpad type: S/W(%d)", LAUNCHPAD_TYPE_SW);
@@ -969,9 +975,10 @@ static gboolean __handle_launch_event(gpointer data)
 	SECURE_LOGD("comp_type : %s\n", menu_info->comp_type);
 	SECURE_LOGD("internal pool : %s\n", menu_info->internal_pool);
 	SECURE_LOGD("hwacc : %s\n", menu_info->hwacc);
+	SECURE_LOGD("pkg_type : %s\n", menu_info->pkg_type);
 
 	if ((loader_id = __get_loader_id(kb)) < 0) {
-		type = __get_launchpad_type(menu_info->internal_pool, menu_info->hwacc);
+		type = __get_launchpad_type(menu_info->internal_pool, menu_info->hwacc, menu_info->pkg_type);
 		if (type < 0) {
 			_E("failed to get launchpad type");
 			goto end;
@@ -1150,6 +1157,11 @@ static int __add_default_slots()
 	if (__add_slot(LAUNCHPAD_TYPE_HW, 0, 0, LOADER_PATH_DEFAULT) == NULL)
 		return -1;
 	if (__prepare_candidate_process(LAUNCHPAD_TYPE_HW, 0) != 0)
+		return -1;
+
+	if (__add_slot(LAUNCHPAD_TYPE_WRT, 0, 0, LOADER_PATH_WRT) == NULL)
+		return -1;
+	if (__prepare_candidate_process(LAUNCHPAD_TYPE_WRT, 0) != 0)
 		return -1;
 
 	return 0;
