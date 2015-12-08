@@ -343,7 +343,6 @@ static int __real_send(int clifd, int ret)
 static void __send_result_to_caller(int clifd, int ret, const char* app_path)
 {
 	char *cmdline;
-	int wait_count;
 	int cmdline_changed = 0;
 	int cmdline_exist = 0;
 	char sock_path[PATH_MAX];
@@ -358,43 +357,13 @@ static void __send_result_to_caller(int clifd, int ret, const char* app_path)
 		__real_send(clifd, ret);
 		return;
 	}
-	/* check normally was launched?*/
-	wait_count = 1;
-	do {
-		cmdline = _proc_get_cmdline_bypid(ret);
-		if (cmdline == NULL) {
-			_E("error founded when being launched with %d", ret);
-			if (cmdline_exist || cmdline_changed) {
-				_E("The app process might be terminated while we are wating %d", ret);
-				break;
-			}
-		} else if (strcmp(cmdline, app_path) == 0) {
-			/* Check app main loop is prepared or not */
-			_D("-- now wait app mainloop creation --");
-			free(cmdline);
-			cmdline_changed = 1;
 
-			snprintf(sock_path, sizeof(sock_path), "/run/user/%d/%d", getuid(), ret);
-			if (access(sock_path, F_OK) == 0)
-				break;
-
-		} else {
-			_D("-- now wait cmdline changing --");
-			cmdline_exist = 1;
-			free(cmdline);
-		}
-		usleep(100 * 1000); /* 100ms sleep*/
-		wait_count++;
-
-	} while (wait_count <= 50); /* max 100*50ms will be sleep*/
-
-	if ((!cmdline_exist) && (!cmdline_changed)) {
+	cmdline = _proc_get_cmdline_bypid(ret);
+	if (cmdline == NULL) {
+		_E("The app process might be terminated while we are wating %d", ret);
 		__real_send(clifd, -1); /* abnormally launched*/
 		return;
 	}
-
-	if (!cmdline_changed)
-		_E("process launched, but cmdline not changed");
 
 	if (__real_send(clifd, ret) < 0)
 		__kill_process(ret);
