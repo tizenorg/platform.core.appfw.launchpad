@@ -358,6 +358,7 @@ static void __send_result_to_caller(int clifd, int ret, const char* app_path)
 		__real_send(clifd, ret);
 		return;
 	}
+#if 0
 	/* check normally was launched?*/
 	wait_count = 1;
 	do {
@@ -395,7 +396,7 @@ static void __send_result_to_caller(int clifd, int ret, const char* app_path)
 
 	if (!cmdline_changed)
 		_E("process launched, but cmdline not changed");
-
+#endif
 	if (__real_send(clifd, ret) < 0)
 		__kill_process(ret);
 
