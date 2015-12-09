@@ -41,6 +41,10 @@
 #define PAD_CMD_ADD_LOADER	11
 #define PAD_CMD_REMOVE_LOADER	12
 
+#define PAD_LOADER_ID_STATIC	0
+#define PAD_LOADER_ID_DIRECT	1
+#define PAD_LOADER_ID_DYNAMIC_BASE	10
+
 #define _E(fmt, arg...) LOGE(fmt, ##arg)
 #define _D(fmt, arg...) LOGD(fmt, ##arg)
 #define _W(fmt, arg...) LOGW(fmt, ##arg)
