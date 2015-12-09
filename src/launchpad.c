@@ -72,7 +72,7 @@ static int __remove_slot(int type, int loader_id);
 
 static int __make_loader_id()
 {
-	static int id = 0;
+	static int id = PAD_LOADER_ID_DYNAMIC_BASE;
 
 	return ++id;
 }
@@ -970,7 +970,7 @@ static gboolean __handle_launch_event(gpointer data)
 	SECURE_LOGD("internal pool : %s\n", menu_info->internal_pool);
 	SECURE_LOGD("hwacc : %s\n", menu_info->hwacc);
 
-	if ((loader_id = __get_loader_id(kb)) < 0) {
+	if ((loader_id = __get_loader_id(kb)) <= PAD_LOADER_ID_STATIC) {
 		type = __get_launchpad_type(menu_info->internal_pool, menu_info->hwacc);
 		if (type < 0) {
 			_E("failed to get launchpad type");
@@ -1137,19 +1137,19 @@ static int __init_sigchild_fd(void)
 
 static int __add_default_slots()
 {
-	if (__add_slot(LAUNCHPAD_TYPE_COMMON, 0, 0, LOADER_PATH_DEFAULT) == NULL)
+	if (__add_slot(LAUNCHPAD_TYPE_COMMON, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_DEFAULT) == NULL)
 		return -1;
-	if (__prepare_candidate_process(LAUNCHPAD_TYPE_COMMON, 0) != 0)
-		return -1;
-
-	if (__add_slot(LAUNCHPAD_TYPE_SW, 0, 0, LOADER_PATH_DEFAULT) == NULL)
-		return -1;
-	if (__prepare_candidate_process(LAUNCHPAD_TYPE_SW, 0) != 0)
+	if (__prepare_candidate_process(LAUNCHPAD_TYPE_COMMON, PAD_LOADER_ID_STATIC) != 0)
 		return -1;
 
-	if (__add_slot(LAUNCHPAD_TYPE_HW, 0, 0, LOADER_PATH_DEFAULT) == NULL)
+	if (__add_slot(LAUNCHPAD_TYPE_SW, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_DEFAULT) == NULL)
 		return -1;
-	if (__prepare_candidate_process(LAUNCHPAD_TYPE_HW, 0) != 0)
+	if (__prepare_candidate_process(LAUNCHPAD_TYPE_SW, PAD_LOADER_ID_STATIC) != 0)
+		return -1;
+
+	if (__add_slot(LAUNCHPAD_TYPE_HW, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_DEFAULT) == NULL)
+		return -1;
+	if (__prepare_candidate_process(LAUNCHPAD_TYPE_HW, PAD_LOADER_ID_STATIC) != 0)
 		return -1;
 
 	return 0;
