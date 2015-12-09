@@ -280,12 +280,6 @@ static int __before_loop(int argc, char **argv)
 	int client_fd;
 	int ret = -1;
 
-	client_fd = _connect_to_launchpad(__loader_type, __loader_id);
-	if (client_fd == -1) {
-		_D("Connecting to candidate process was failed.");
-		return -1;
-	}
-
 #ifdef _APPFW_FEATURE_LOADER_PRIORITY
 	int res = setpriority(PRIO_PROCESS, 0, LOWEST_PRIO);
 
@@ -305,7 +299,6 @@ static int __before_loop(int argc, char **argv)
 
 	if (__loader_callbacks->create) {
 		__loader_callbacks->create(argc, argv, __loader_type, __loader_user_data);
-		__loader_adapter->add_fd(__loader_user_data, client_fd, __receiver_cb);
 		ret = 0;
 	}
 
@@ -318,6 +311,14 @@ static int __before_loop(int argc, char **argv)
 			getpid(), errno, strerror_r(errno, err_str, sizeof(err_str)));
 	}
 #endif
+	client_fd = _connect_to_launchpad(__loader_type, __loader_id);
+	if (client_fd == -1) {
+		_D("Connecting to candidate process was failed.");
+		return -1;
+	}
+
+	__loader_adapter->add_fd(__loader_user_data, client_fd, __receiver_cb);
+
 	return ret;
 }
 
