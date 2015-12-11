@@ -86,7 +86,7 @@ static inline int __send_app_dead_signal_dbus(int dead_pid)
 	return 0;
 }
 
-static inline int __send_app_launch_signal_dbus(int launch_pid)
+static inline int __send_app_launch_signal_dbus(int launch_pid, const char *app_id)
 {
 	DBusMessage *message;
 
@@ -99,6 +99,7 @@ static inline int __send_app_launch_signal_dbus(int launch_pid)
 
 	if (dbus_message_append_args(message,
 				     DBUS_TYPE_UINT32, &launch_pid,
+				     DBUS_TYPE_STRING, &app_id,
 				     DBUS_TYPE_INVALID) == FALSE) {
 		_E("Failed to load data error");
 		return -1;

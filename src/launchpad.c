@@ -1019,7 +1019,7 @@ end:
 		close(clifd);
 
 	if (pid > 0)
-		__send_app_launch_signal_dbus(pid);
+		__send_app_launch_signal_dbus(pid, menu_info->appid);
 
 	if (menu_info != NULL)
 		_appinfo_free(menu_info);
