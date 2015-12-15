@@ -277,7 +277,7 @@ retry_recv:
 	pkt->len = datalen;
 
 	len = 0;
-	while ( len != pkt->len ) {
+	while (len != pkt->len) {
 		ret = recv(*clifd, pkt->data + len, pkt->len - len, 0);
 		if (ret < 0) {
 			_E("recv error %d %d", len, pkt->len);
@@ -325,6 +325,7 @@ char *_proc_get_cmdline_bypid(int pid)
 {
 	char buf[MAX_CMD_BUFSZ];
 	int ret;
+	char *ptr;
 
 	snprintf(buf, sizeof(buf), "/proc/%d/cmdline", pid);
 	ret = __read_proc(buf, buf, sizeof(buf));
@@ -332,22 +333,21 @@ char *_proc_get_cmdline_bypid(int pid)
 		return NULL;
 
 	/* support app launched by shell script*/
-	if (strncmp(buf, BINSH_NAME, BINSH_SIZE) == 0) {
+	if (strncmp(buf, BINSH_NAME, BINSH_SIZE) == 0)
 		return strdup(&buf[BINSH_SIZE + 1]);
-	} else if (strncmp(buf, VALGRIND_NAME, VALGRIND_SIZE) == 0) {
-		char* ptr = buf;
+	else if (strncmp(buf, VALGRIND_NAME, VALGRIND_SIZE) == 0) {
+		ptr = buf;
 
-		// buf comes with double null-terminated string
+		/* buf comes with double null-terminated string */
 		while (1) {
-			while (*ptr) {
+			while (*ptr)
 				ptr++;
-			}
 			ptr++;
 
 			if (!(*ptr))
 				break;
 
-			// ignore trailing "--"
+			/* ignore trailing "--" */
 			if (strncmp(ptr, "-", 1) != 0)
 				break;
 		}
@@ -413,6 +413,7 @@ char *_appinfo_get_app_path(appinfo_t *menu_info)
 {
 	int i = 0;
 	int path_len = -1;
+	char *tmp_app_path;
 
 	if (!menu_info || menu_info->app_path == NULL)
 		return NULL;
@@ -430,8 +431,8 @@ char *_appinfo_get_app_path(appinfo_t *menu_info)
 		free(menu_info->app_path);
 		menu_info->app_path = NULL;
 	} else if (path_len > 0) {
-		char *tmp_app_path = malloc(sizeof(char) * (path_len + 1));
-		if(tmp_app_path == NULL)
+		tmp_app_path = malloc(sizeof(char) * (path_len + 1));
+		if (tmp_app_path == NULL)
 			return NULL;
 		snprintf(tmp_app_path, path_len + 1, "%s", menu_info->app_path);
 		free(menu_info->app_path);
@@ -443,32 +444,39 @@ char *_appinfo_get_app_path(appinfo_t *menu_info)
 
 void _appinfo_free(appinfo_t *menu_info)
 {
-	if (menu_info != NULL) {
-		if (menu_info->appid != NULL)
-			free(menu_info->appid);
-		if (menu_info->app_path != NULL)
-			free(menu_info->app_path);
-		if (menu_info->original_app_path != NULL)
-			free(menu_info->original_app_path);
-		if (menu_info->pkg_type != NULL)
-			free(menu_info->pkg_type);
-		if (menu_info->hwacc != NULL)
-			free(menu_info->hwacc);
-		if (menu_info->taskmanage != NULL)
-			free(menu_info->taskmanage);
-		if (menu_info->pkgid != NULL)
-			free(menu_info->pkgid);
-		if (menu_info->comp_type != NULL)
-			free(menu_info->comp_type);
-		if (menu_info->internal_pool != NULL)
-			free(menu_info->internal_pool);
+	if (menu_info == NULL)
+		return;
 
-		free(menu_info);
-	}
+	if (menu_info->appid != NULL)
+		free(menu_info->appid);
+	if (menu_info->app_path != NULL)
+		free(menu_info->app_path);
+	if (menu_info->original_app_path != NULL)
+		free(menu_info->original_app_path);
+	if (menu_info->pkg_type != NULL)
+		free(menu_info->pkg_type);
+	if (menu_info->hwacc != NULL)
+		free(menu_info->hwacc);
+	if (menu_info->taskmanage != NULL)
+		free(menu_info->taskmanage);
+	if (menu_info->pkgid != NULL)
+		free(menu_info->pkgid);
+	if (menu_info->comp_type != NULL)
+		free(menu_info->comp_type);
+	if (menu_info->internal_pool != NULL)
+		free(menu_info->internal_pool);
+
+	free(menu_info);
 }
 
 void _modify_bundle(bundle * kb, int caller_pid, appinfo_t *menu_info, int cmd)
 {
+	char *ptr;
+	char exe[MAX_PATH_LEN];
+	int flag;
+	char key[256];
+	char value[256];
+
 	bundle_del(kb, AUL_K_APPID);
 	bundle_del(kb, AUL_K_EXEC);
 	bundle_del(kb, AUL_K_PACKAGETYPE);
@@ -480,17 +488,9 @@ void _modify_bundle(bundle * kb, int caller_pid, appinfo_t *menu_info, int cmd)
 
 	/* Parse app_path to retrieve default bundle*/
 	if (cmd == PAD_CMD_LAUNCH) {
-		char *ptr;
-		char exe[MAX_PATH_LEN];
-		int flag;
-
 		ptr = menu_info->original_app_path;
-
 		flag = __parse_app_path(ptr, exe, sizeof(exe));
 		if (flag > 0) {
-			char key[256];
-			char value[256];
-
 			ptr += flag;
 			SECURE_LOGD("parsing app_path: EXEC - %s\n", exe);
 
