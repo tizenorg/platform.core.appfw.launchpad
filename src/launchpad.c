@@ -42,7 +42,7 @@
 #define AUL_PR_NAME         16
 #define EXEC_CANDIDATE_EXPIRED 5
 #define EXEC_CANDIDATE_WAIT 1
-#define DIFF(a,b) (((a)>(b))?(a)-(b):(b)-(a))
+#define DIFF(a, b) (((a) > (b)) ? (a) - (b) : (b) - (a))
 #define CANDIDATE_NONE 0
 #define PROCESS_POOL_LAUNCHPAD_SOCK ".launchpad-process-pool-sock"
 #define LOADER_PATH_DEFAULT "/usr/bin/launchpad-loader"
@@ -150,13 +150,10 @@ static candidate_process_context_t* __find_slot(int type, int loader_id)
 
 static void __kill_process(int pid)
 {
-	int r = kill(pid, SIGKILL);
+	char err_str[MAX_LOCAL_BUFSZ] = { 0, };
 
-	if (r == -1) {
-		char err_str[MAX_LOCAL_BUFSZ] = { 0, };
-
+	if (kill(pid, SIGKILL) == -1)
 		_E("send SIGKILL: %s", strerror_r(errno, err_str, sizeof(err_str)));
-	}
 }
 
 static void __refuse_candidate_process(int server_fd)
@@ -181,10 +178,12 @@ error:
 	return;
 }
 
-static int __accept_candidate_process(int server_fd, int* out_client_fd,
-                              int* out_client_pid)
+static int __accept_candidate_process(int server_fd, int *out_client_fd,
+		int *out_client_pid)
 {
-	int client_fd = -1, client_pid = 0, recv_ret = 0;
+	int client_fd = -1;
+	int client_pid = 0;
+	int recv_ret = 0;
 
 	if (server_fd == -1 || out_client_fd == NULL || out_client_pid == NULL) {
 		_E("arguments error!");
@@ -273,6 +272,9 @@ static int __set_access(const char* appId, const char* pkg_type,
 
 static int __get_launchpad_type(const char* internal_pool, const char* hwacc)
 {
+	int r;
+	int sys_hwacc = -1;
+
 	if (internal_pool && strncmp(internal_pool, "true", 4) == 0 && hwacc) {
 		if (strncmp(hwacc, "NOT_USE", 7) == 0) {
 			_D("[launchpad] launchpad type: S/W(%d)", LAUNCHPAD_TYPE_SW);
@@ -283,23 +285,19 @@ static int __get_launchpad_type(const char* internal_pool, const char* hwacc)
 			return LAUNCHPAD_TYPE_HW;
 		}
 		if (strncmp(hwacc, "SYS", 3) == 0) {
-		    int r;
-		    int sys_hwacc = -1;
+			r = vconf_get_int(VCONFKEY_SETAPPL_APP_HW_ACCELERATION, &sys_hwacc);
+			if (r != VCONF_OK)
+				_E("failed to get vconf int: %s", VCONFKEY_SETAPPL_APP_HW_ACCELERATION);
 
-		    r = vconf_get_int(VCONFKEY_SETAPPL_APP_HW_ACCELERATION, &sys_hwacc);
-		    if (r != VCONF_OK)
-		        _E("failed to get vconf int: %s", VCONFKEY_SETAPPL_APP_HW_ACCELERATION);
+			SECURE_LOGD("sys hwacc: %d", sys_hwacc);
 
-		    SECURE_LOGD("sys hwacc: %d", sys_hwacc);
-
-		    if (sys_hwacc == SETTING_HW_ACCELERATION_ON) {
-		        _D("[launchpad] launchpad type: H/W(%d)", LAUNCHPAD_TYPE_HW);
-		        return LAUNCHPAD_TYPE_HW;
-		    }
-		    if (sys_hwacc == SETTING_HW_ACCELERATION_OFF) {
-		        _D("[launchpad] launchpad type: S/W(%d)", LAUNCHPAD_TYPE_SW);
-		        return LAUNCHPAD_TYPE_SW;
-		    }
+			if (sys_hwacc == SETTING_HW_ACCELERATION_ON) {
+				_D("[launchpad] launchpad type: H/W(%d)", LAUNCHPAD_TYPE_HW);
+				return LAUNCHPAD_TYPE_HW;
+			} else if (sys_hwacc == SETTING_HW_ACCELERATION_OFF) {
+				_D("[launchpad] launchpad type: S/W(%d)", LAUNCHPAD_TYPE_SW);
+				return LAUNCHPAD_TYPE_SW;
+			}
 		}
 	}
 
@@ -343,9 +341,6 @@ static int __real_send(int clifd, int ret)
 static void __send_result_to_caller(int clifd, int ret, const char* app_path)
 {
 	char *cmdline;
-	int cmdline_changed = 0;
-	int cmdline_exist = 0;
-	char sock_path[PATH_MAX];
 
 	_W("Check app launching");
 
@@ -384,7 +379,6 @@ static int __prepare_candidate_process(int type, int loader_id)
 
 	cpt->last_exec_time = time(NULL);
 	pid = fork();
-
 	if (pid == 0) { /* child */
 		__signal_unblock_sigchld();
 
@@ -446,7 +440,7 @@ static int __send_launchpad_loader(candidate_process_context_t *cpc, app_pkt_t *
 		cpc->timer = 0;
 	}
 
-	__send_result_to_caller(clifd, pid, app_path); //to AMD
+	__send_result_to_caller(clifd, pid, app_path); /* to AMD */
 
 	if (strcmp("uiapp", comp_type) == 0)
 		cpc->timer = g_timeout_add(5000, __handle_preparing_candidate_process, cpc);
@@ -804,9 +798,9 @@ static gboolean __handle_sigchild(gpointer data)
 
 static int __dispatch_cmd_visibility(bundle *kb)
 {
-	_W("cmd visibility");
 	GList *iter = candidate_slot_list;
 
+	_W("cmd visibility");
 	while (iter) {
 		candidate_process_context_t *cpc = (candidate_process_context_t*)iter->data;
 
@@ -826,17 +820,17 @@ static int __dispatch_cmd_visibility(bundle *kb)
 
 static int __dispatch_cmd_add_loader(bundle *kb)
 {
-	_W("cmd add loader");
 	const char *add_slot_str = NULL;
 	const char *caller_pid = NULL;
+	int lid;
 
+	_W("cmd add loader");
 	add_slot_str = bundle_get_val(kb, AUL_K_LOADER_PATH);
 	caller_pid = bundle_get_val(kb, AUL_K_CALLER_PID);
 
 	if (add_slot_str && caller_pid) {
-		int lid = __make_loader_id();
+		lid = __make_loader_id();
 		candidate_process_context_t *cpc = __add_slot(LAUNCHPAD_TYPE_DYNAMIC, lid, atoi(caller_pid), add_slot_str);
-
 		if (cpc)
 			cpc->timer = g_timeout_add(2000, __handle_preparing_candidate_process, cpc);
 
@@ -848,12 +842,12 @@ static int __dispatch_cmd_add_loader(bundle *kb)
 
 static int __dispatch_cmd_remove_loader(bundle *kb)
 {
-	_W("cmd remove loader");
 	const char *id = bundle_get_val(kb, AUL_K_LOADER_ID);
+	int lid;
 
+	_W("cmd remove loader");
 	if (id) {
-		int lid = atoi(id);
-
+		lid = atoi(id);
 		if (__remove_slot(LAUNCHPAD_TYPE_DYNAMIC, lid) == 0)
 			return 0;
 	}
@@ -891,23 +885,21 @@ static gboolean __handle_launch_event(gpointer data)
 	}
 
 	switch (pkt->cmd) {
-		case PAD_CMD_VISIBILITY:
-			ret = __dispatch_cmd_visibility(kb);
-			__real_send(clifd, ret);
-			clifd = -1;
-			goto end;
-
-		case PAD_CMD_ADD_LOADER:
-			ret = __dispatch_cmd_add_loader(kb);
-			__real_send(clifd, ret);
-			clifd = -1;
-			goto end;
-
-		case PAD_CMD_REMOVE_LOADER:
-			ret = __dispatch_cmd_remove_loader(kb);
-			__real_send(clifd, ret);
-			clifd = -1;
-			goto end;
+	case PAD_CMD_VISIBILITY:
+		ret = __dispatch_cmd_visibility(kb);
+		__real_send(clifd, ret);
+		clifd = -1;
+		goto end;
+	case PAD_CMD_ADD_LOADER:
+		ret = __dispatch_cmd_add_loader(kb);
+		__real_send(clifd, ret);
+		clifd = -1;
+		goto end;
+	case PAD_CMD_REMOVE_LOADER:
+		ret = __dispatch_cmd_remove_loader(kb);
+		__real_send(clifd, ret);
+		clifd = -1;
+		goto end;
 	}
 
 	INIT_PERF(kb);
@@ -1147,13 +1139,11 @@ static int __before_loop(int argc, char **argv)
 static void __set_priority(void)
 {
 #ifdef _APPFW_FEATURE_PRIORITY_CHANGE
+	char err_str[MAX_LOCAL_BUFSZ] = { 0, };
 	int res = setpriority(PRIO_PROCESS, 0, -12);
-	if (res == -1) {
-		char err_str[MAX_LOCAL_BUFSZ] = { 0, };
-
+	if (res == -1)
 		SECURE_LOGE("Setting process (%d) priority to -12 failed, errno: %d (%s)",
 			getpid(), errno, strerror_r(errno, err_str, sizeof(err_str)));
-	}
 #endif
 }
 

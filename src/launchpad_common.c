@@ -277,7 +277,7 @@ retry_recv:
 	pkt->len = datalen;
 
 	len = 0;
-	while ( len != pkt->len ) {
+	while (len != pkt->len) {
 		ret = recv(*clifd, pkt->data + len, pkt->len - len, 0);
 		if (ret < 0) {
 			_E("recv error %d %d", len, pkt->len);
@@ -337,17 +337,16 @@ char *_proc_get_cmdline_bypid(int pid)
 	} else if (strncmp(buf, VALGRIND_NAME, VALGRIND_SIZE) == 0) {
 		char* ptr = buf;
 
-		// buf comes with double null-terminated string
+		/* buf comes with double null-terminated string */
 		while (1) {
-			while (*ptr) {
+			while (*ptr)
 				ptr++;
-			}
 			ptr++;
 
 			if (!(*ptr))
 				break;
 
-			// ignore trailing "--"
+			/* ignore trailing "--" */
 			if (strncmp(ptr, "-", 1) != 0)
 				break;
 		}
@@ -413,6 +412,7 @@ char *_appinfo_get_app_path(appinfo_t *menu_info)
 {
 	int i = 0;
 	int path_len = -1;
+	char *tmp_app_path;
 
 	if (!menu_info || menu_info->app_path == NULL)
 		return NULL;
@@ -430,8 +430,8 @@ char *_appinfo_get_app_path(appinfo_t *menu_info)
 		free(menu_info->app_path);
 		menu_info->app_path = NULL;
 	} else if (path_len > 0) {
-		char *tmp_app_path = malloc(sizeof(char) * (path_len + 1));
-		if(tmp_app_path == NULL)
+		tmp_app_path = malloc(sizeof(char) * (path_len + 1));
+		if (tmp_app_path == NULL)
 			return NULL;
 		snprintf(tmp_app_path, path_len + 1, "%s", menu_info->app_path);
 		free(menu_info->app_path);

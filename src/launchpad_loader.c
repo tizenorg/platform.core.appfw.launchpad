@@ -83,19 +83,17 @@ static void __loader_create_cb(int argc, char **argv, int type, void *user_data)
 	_D("[candidate] elm init, returned: %d", elm_init_cnt);
 
 	switch (type) {
-		case LAUNCHPAD_TYPE_SW:
-			elm_config_accel_preference_set("none");
-			__init_window();
-			break;
-
-		case LAUNCHPAD_TYPE_HW:
-			elm_config_accel_preference_set("hw");
-			__init_window();
-			break;
-
-		case LAUNCHPAD_TYPE_COMMON:
-			__init_theme();
-			break;
+	case LAUNCHPAD_TYPE_SW:
+		elm_config_accel_preference_set("none");
+		__init_window();
+		break;
+	case LAUNCHPAD_TYPE_HW:
+		elm_config_accel_preference_set("hw");
+		__init_window();
+		break;
+	case LAUNCHPAD_TYPE_COMMON:
+		__init_theme();
+		break;
 	}
 }
 
@@ -110,6 +108,7 @@ static int __loader_terminate_cb(int argc, char **argv, void *user_data)
 	void *handle = NULL;
 	int res;
 	int (*dl_main)(int, char **);
+	char err_str[MAX_LOCAL_BUFSZ] = { 0, };
 
 	SECURE_LOGD("[candidate] Launch real application (%s)", argv[0]);
 	handle = dlopen(argv[0], RTLD_LAZY | RTLD_GLOBAL);
@@ -134,19 +133,14 @@ static int __loader_terminate_cb(int argc, char **argv, void *user_data)
 	return res;
 
 do_exec:
-	if (access(argv[0], F_OK | R_OK)) {
-		char err_str[MAX_LOCAL_BUFSZ] = { 0, };
-
+	if (access(argv[0], F_OK | R_OK))
 		SECURE_LOGE("access() failed for file: \"%s\", error: %d (%s)",
 			argv[0], errno, strerror_r(errno, err_str, sizeof(err_str)));
-	} else {
+	else {
 		SECURE_LOGD("[candidate] Exec application (%s)", g_argv[0]);
-		if (execv(argv[0], argv) < 0) {
-			char err_str[MAX_LOCAL_BUFSZ] = { 0, };
-
+		if (execv(argv[0], argv) < 0)
 			SECURE_LOGE("execv() failed for file: \"%s\", error: %d (%s)",
 				argv[0], errno, strerror_r(errno, err_str, sizeof(err_str)));
-		}
 	}
 
 	return -1;
@@ -185,7 +179,7 @@ static void __adapter_loop_quit(void *user_data)
 }
 
 static void __adapter_add_fd(void *user_data, int fd,
-                             loader_receiver_cb receiver)
+		loader_receiver_cb receiver)
 {
 	__fd_handler = ecore_main_fd_handler_add(fd,
 			(Ecore_Fd_Handler_Flags)(ECORE_FD_READ | ECORE_FD_ERROR),

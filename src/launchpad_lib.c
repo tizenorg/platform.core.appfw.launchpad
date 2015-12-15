@@ -45,12 +45,11 @@ static void __at_exit_to_release_bundle()
 
 static void __release_appid_at_exit(void)
 {
-	if (__appid != NULL) {
+	if (__appid != NULL)
 		free(__appid);
-	}
-	if (__pkgid != NULL) {
+
+	if (__pkgid != NULL)
 		free(__pkgid);
-	}
 }
 
 static int __set_access(const char* appId, const char* pkg_type,
@@ -104,29 +103,26 @@ static int __default_launch_cb(bundle *kb, const char *appid,
 				const char *app_path, const char *pkg_type, int loader_type)
 {
 #ifdef _APPFW_FEATURE_PRIORITY_CHANGE
+	int res;
 	const char *high_priority = bundle_get_val(kb, AUL_K_HIGHPRIORITY);
+	char err_str[MAX_LOCAL_BUFSZ] = { 0, };
+
 	_D("high_priority: %s", high_priority);
-
 	if (strncmp(high_priority, "true", 4) == 0) {
-		int res = setpriority(PRIO_PROCESS, 0, -10);
-		if (res == -1) {
-			char err_str[MAX_LOCAL_BUFSZ] = { 0, };
-
+		res = setpriority(PRIO_PROCESS, 0, -10);
+		if (res == -1)
 			SECURE_LOGE("Setting process (%d) priority to -10 failed, errno: %d (%s)",
-			            getpid(), errno, strerror_r(errno, err_str, sizeof(err_str)));
-		}
+					getpid(), errno, strerror_r(errno, err_str, sizeof(err_str)));
 	}
 	bundle_del(kb, AUL_K_HIGHPRIORITY);
 #endif
 
 	if (__prepare_exec(appid, app_path, pkg_type, loader_type) < 0) {
 		_E("__candidate_process_prepare_exec() failed");
-		if (access(app_path, F_OK | R_OK)) {
-			char err_str[MAX_LOCAL_BUFSZ] = { 0, };
-
+		if (access(app_path, F_OK | R_OK))
 			SECURE_LOGE("access() failed for file: \"%s\", error: %d (%s)",
-			            app_path, errno, strerror_r(errno, err_str, sizeof(err_str)));
-		}
+					app_path, errno, strerror_r(errno, err_str, sizeof(err_str)));
+
 		exit(-1);
 	}
 
@@ -142,6 +138,7 @@ static int __candidate_process_launchpad_main_loop(app_pkt_t* pkt,
 	int tmp_argc = 0;
 	char **tmp_argv = NULL;
 	int ret = -1;
+	int i;
 
 	kb = bundle_decode(pkt->data, pkt->len);
 	if (!kb) {
@@ -220,8 +217,6 @@ static int __candidate_process_launchpad_main_loop(app_pkt_t* pkt,
 	_set_env(menu_info, kb);
 
 	if (out_app_path != NULL && out_argc != NULL && out_argv != NULL) {
-		int i = 0;
-
 		memset(out_app_path, '\0', strlen(out_app_path));
 		sprintf(out_app_path, "%s", app_path);
 
@@ -242,6 +237,9 @@ static int __candidate_process_launchpad_main_loop(app_pkt_t* pkt,
 
 static void __receiver_cb(int fd)
 {
+	int ret = -1;
+	int recv_ret;
+
 	_D("[candidate] ECORE_FD_READ");
 	app_pkt_t* pkt = (app_pkt_t*) malloc(sizeof(char) * AUL_SOCK_MAXBUFF);
 	if (!pkt) {
@@ -250,8 +248,7 @@ static void __receiver_cb(int fd)
 	}
 	memset(pkt, 0, AUL_SOCK_MAXBUFF);
 
-	int ret = -1;
-	int recv_ret = recv(fd, pkt, AUL_SOCK_MAXBUFF, 0);
+	recv_ret = recv(fd, pkt, AUL_SOCK_MAXBUFF, 0);
 
 	if (recv_ret == -1) {
 		_D("[condidate] recv error!");
@@ -263,10 +260,10 @@ static void __receiver_cb(int fd)
 
 	__loader_adapter->remove_fd(__loader_user_data, fd);
 	close(fd);
-	ret = __candidate_process_launchpad_main_loop(pkt, __argv[0], &__argc, &__argv,
-	        __loader_type);
-	SECURE_LOGD("[candidate] real app argv[0]: %s, real app argc: %d", __argv[0],
-	            __argc);
+	ret = __candidate_process_launchpad_main_loop(pkt, __argv[0],
+			&__argc, &__argv, __loader_type);
+	SECURE_LOGD("[candidate] real app argv[0]: %s, real app argc: %d",
+			__argv[0], __argc);
 	free(pkt);
 
 	if (ret >= 0) {
@@ -279,16 +276,13 @@ static int __before_loop(int argc, char **argv)
 {
 	int client_fd;
 	int ret = -1;
-
 #ifdef _APPFW_FEATURE_LOADER_PRIORITY
+	char err_str[MAX_LOCAL_BUFSZ] = { 0, };
 	int res = setpriority(PRIO_PROCESS, 0, LOWEST_PRIO);
 
-	if (res == -1) {
-		char err_str[MAX_LOCAL_BUFSZ] = { 0, };
-
+	if (res == -1)
 		SECURE_LOGE("Setting process (%d) priority to %d failed, errno: %d (%s)",
 			getpid(), LOWEST_PRIO, errno, strerror_r(errno, err_str, sizeof(err_str)));
-	}
 #endif
 	__preexec_init(argc, argv);
 
@@ -304,12 +298,9 @@ static int __before_loop(int argc, char **argv)
 
 #ifdef _APPFW_FEATURE_LOADER_PRIORITY
 	res = setpriority(PRIO_PGRP, 0, 0);
-	if (res == -1) {
-		char err_str[MAX_LOCAL_BUFSZ] = { 0, };
-
+	if (res == -1)
 		SECURE_LOGE("Setting process (%d) priority to 0 failed, errno: %d (%s)",
 			getpid(), errno, strerror_r(errno, err_str, sizeof(err_str)));
-	}
 #endif
 	client_fd = _connect_to_launchpad(__loader_type, __loader_id);
 	if (client_fd == -1) {
@@ -324,12 +315,11 @@ static int __before_loop(int argc, char **argv)
 
 static int __after_loop(void)
 {
-	if (__loader_callbacks->terminate) {
+	if (__loader_callbacks->terminate)
 		return __loader_callbacks->terminate(__argc, __argv, __loader_user_data);
-	}
+
 	return -1;
 }
-
 
 API int launchpad_loader_main(int argc, char **argv,
 				loader_lifecycle_callback_s *callbacks, loader_adapter_s *adapter,
@@ -378,5 +368,3 @@ API int launchpad_loader_main(int argc, char **argv,
 
 	return __after_loop();
 }
-
-
