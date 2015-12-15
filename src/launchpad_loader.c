@@ -83,19 +83,17 @@ static void __loader_create_cb(int argc, char **argv, int type, void *user_data)
 	_D("[candidate] elm init, returned: %d", elm_init_cnt);
 
 	switch (type) {
-		case LAUNCHPAD_TYPE_SW:
-			elm_config_accel_preference_set("none");
-			__init_window();
-			break;
-
-		case LAUNCHPAD_TYPE_HW:
-			elm_config_accel_preference_set("hw");
-			__init_window();
-			break;
-
-		case LAUNCHPAD_TYPE_COMMON:
-			__init_theme();
-			break;
+	case LAUNCHPAD_TYPE_SW:
+		elm_config_accel_preference_set("none");
+		__init_window();
+		break;
+	case LAUNCHPAD_TYPE_HW:
+		elm_config_accel_preference_set("hw");
+		__init_window();
+		break;
+	case LAUNCHPAD_TYPE_COMMON:
+		__init_theme();
+		break;
 	}
 }
 
@@ -185,7 +183,7 @@ static void __adapter_loop_quit(void *user_data)
 }
 
 static void __adapter_add_fd(void *user_data, int fd,
-                             loader_receiver_cb receiver)
+		loader_receiver_cb receiver)
 {
 	__fd_handler = ecore_main_fd_handler_add(fd,
 			(Ecore_Fd_Handler_Flags)(ECORE_FD_READ | ECORE_FD_ERROR),

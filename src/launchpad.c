@@ -42,7 +42,7 @@
 #define AUL_PR_NAME         16
 #define EXEC_CANDIDATE_EXPIRED 5
 #define EXEC_CANDIDATE_WAIT 1
-#define DIFF(a,b) (((a)>(b))?(a)-(b):(b)-(a))
+#define DIFF(a, b) (((a) > (b)) ? (a) - (b) : (b) - (a))
 #define CANDIDATE_NONE 0
 #define PROCESS_POOL_LAUNCHPAD_SOCK ".launchpad-process-pool-sock"
 #define LOADER_PATH_DEFAULT "/usr/bin/launchpad-loader"
@@ -181,8 +181,8 @@ error:
 	return;
 }
 
-static int __accept_candidate_process(int server_fd, int* out_client_fd,
-                              int* out_client_pid)
+static int __accept_candidate_process(int server_fd, int *out_client_fd,
+		int *out_client_pid)
 {
 	int client_fd = -1, client_pid = 0, recv_ret = 0;
 
@@ -283,23 +283,23 @@ static int __get_launchpad_type(const char* internal_pool, const char* hwacc)
 			return LAUNCHPAD_TYPE_HW;
 		}
 		if (strncmp(hwacc, "SYS", 3) == 0) {
-		    int r;
-		    int sys_hwacc = -1;
+			int r;
+			int sys_hwacc = -1;
 
-		    r = vconf_get_int(VCONFKEY_SETAPPL_APP_HW_ACCELERATION, &sys_hwacc);
-		    if (r != VCONF_OK)
-		        _E("failed to get vconf int: %s", VCONFKEY_SETAPPL_APP_HW_ACCELERATION);
+			r = vconf_get_int(VCONFKEY_SETAPPL_APP_HW_ACCELERATION, &sys_hwacc);
+			if (r != VCONF_OK)
+				_E("failed to get vconf int: %s", VCONFKEY_SETAPPL_APP_HW_ACCELERATION);
 
-		    SECURE_LOGD("sys hwacc: %d", sys_hwacc);
+			SECURE_LOGD("sys hwacc: %d", sys_hwacc);
 
-		    if (sys_hwacc == SETTING_HW_ACCELERATION_ON) {
-		        _D("[launchpad] launchpad type: H/W(%d)", LAUNCHPAD_TYPE_HW);
-		        return LAUNCHPAD_TYPE_HW;
-		    }
-		    if (sys_hwacc == SETTING_HW_ACCELERATION_OFF) {
-		        _D("[launchpad] launchpad type: S/W(%d)", LAUNCHPAD_TYPE_SW);
-		        return LAUNCHPAD_TYPE_SW;
-		    }
+			if (sys_hwacc == SETTING_HW_ACCELERATION_ON) {
+				_D("[launchpad] launchpad type: H/W(%d)", LAUNCHPAD_TYPE_HW);
+				return LAUNCHPAD_TYPE_HW;
+			}
+			if (sys_hwacc == SETTING_HW_ACCELERATION_OFF) {
+				_D("[launchpad] launchpad type: S/W(%d)", LAUNCHPAD_TYPE_SW);
+				return LAUNCHPAD_TYPE_SW;
+			}
 		}
 	}
 
@@ -343,9 +343,6 @@ static int __real_send(int clifd, int ret)
 static void __send_result_to_caller(int clifd, int ret, const char* app_path)
 {
 	char *cmdline;
-	int cmdline_changed = 0;
-	int cmdline_exist = 0;
-	char sock_path[PATH_MAX];
 
 	_W("Check app launching");
 
@@ -446,7 +443,7 @@ static int __send_launchpad_loader(candidate_process_context_t *cpc, app_pkt_t *
 		cpc->timer = 0;
 	}
 
-	__send_result_to_caller(clifd, pid, app_path); //to AMD
+	__send_result_to_caller(clifd, pid, app_path); /* to AMD */
 
 	if (strcmp("uiapp", comp_type) == 0)
 		cpc->timer = g_timeout_add(5000, __handle_preparing_candidate_process, cpc);
@@ -891,23 +888,21 @@ static gboolean __handle_launch_event(gpointer data)
 	}
 
 	switch (pkt->cmd) {
-		case PAD_CMD_VISIBILITY:
-			ret = __dispatch_cmd_visibility(kb);
-			__real_send(clifd, ret);
-			clifd = -1;
-			goto end;
-
-		case PAD_CMD_ADD_LOADER:
-			ret = __dispatch_cmd_add_loader(kb);
-			__real_send(clifd, ret);
-			clifd = -1;
-			goto end;
-
-		case PAD_CMD_REMOVE_LOADER:
-			ret = __dispatch_cmd_remove_loader(kb);
-			__real_send(clifd, ret);
-			clifd = -1;
-			goto end;
+	case PAD_CMD_VISIBILITY:
+		ret = __dispatch_cmd_visibility(kb);
+		__real_send(clifd, ret);
+		clifd = -1;
+		goto end;
+	case PAD_CMD_ADD_LOADER:
+		ret = __dispatch_cmd_add_loader(kb);
+		__real_send(clifd, ret);
+		clifd = -1;
+		goto end;
+	case PAD_CMD_REMOVE_LOADER:
+		ret = __dispatch_cmd_remove_loader(kb);
+		__real_send(clifd, ret);
+		clifd = -1;
+		goto end;
 	}
 
 	INIT_PERF(kb);
