@@ -45,12 +45,11 @@ static void __at_exit_to_release_bundle()
 
 static void __release_appid_at_exit(void)
 {
-	if (__appid != NULL) {
+	if (__appid != NULL)
 		free(__appid);
-	}
-	if (__pkgid != NULL) {
+
+	if (__pkgid != NULL)
 		free(__pkgid);
-	}
 }
 
 static int __set_access(const char* appId, const char* pkg_type,
@@ -113,7 +112,7 @@ static int __default_launch_cb(bundle *kb, const char *appid,
 			char err_str[MAX_LOCAL_BUFSZ] = { 0, };
 
 			SECURE_LOGE("Setting process (%d) priority to -10 failed, errno: %d (%s)",
-			            getpid(), errno, strerror_r(errno, err_str, sizeof(err_str)));
+					getpid(), errno, strerror_r(errno, err_str, sizeof(err_str)));
 		}
 	}
 	bundle_del(kb, AUL_K_HIGHPRIORITY);
@@ -125,7 +124,7 @@ static int __default_launch_cb(bundle *kb, const char *appid,
 			char err_str[MAX_LOCAL_BUFSZ] = { 0, };
 
 			SECURE_LOGE("access() failed for file: \"%s\", error: %d (%s)",
-			            app_path, errno, strerror_r(errno, err_str, sizeof(err_str)));
+					app_path, errno, strerror_r(errno, err_str, sizeof(err_str)));
 		}
 		exit(-1);
 	}
@@ -263,10 +262,10 @@ static void __receiver_cb(int fd)
 
 	__loader_adapter->remove_fd(__loader_user_data, fd);
 	close(fd);
-	ret = __candidate_process_launchpad_main_loop(pkt, __argv[0], &__argc, &__argv,
-	        __loader_type);
-	SECURE_LOGD("[candidate] real app argv[0]: %s, real app argc: %d", __argv[0],
-	            __argc);
+	ret = __candidate_process_launchpad_main_loop(pkt, __argv[0],
+			&__argc, &__argv, __loader_type);
+	SECURE_LOGD("[candidate] real app argv[0]: %s, real app argc: %d",
+			__argv[0], __argc);
 	free(pkt);
 
 	if (ret >= 0) {
@@ -324,12 +323,11 @@ static int __before_loop(int argc, char **argv)
 
 static int __after_loop(void)
 {
-	if (__loader_callbacks->terminate) {
+	if (__loader_callbacks->terminate)
 		return __loader_callbacks->terminate(__argc, __argv, __loader_user_data);
-	}
+
 	return -1;
 }
-
 
 API int launchpad_loader_main(int argc, char **argv,
 				loader_lifecycle_callback_s *callbacks, loader_adapter_s *adapter,
