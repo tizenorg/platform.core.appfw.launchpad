@@ -1003,13 +1003,14 @@ end:
 
 static candidate_process_context_t* __add_slot(int type, int loader_id, int caller_pid, const char *loader_path)
 {
-	candidate_process_context_t *cpc = (candidate_process_context_t*)malloc(sizeof(candidate_process_context_t));
+	candidate_process_context_t *cpc;
 	int fd = -1;
 
-	if (cpc == NULL)
+	if (__find_slot(type, loader_id) != NULL)
 		return NULL;
 
-	if (__find_slot(type, loader_id) != NULL)
+	cpc = (candidate_process_context_t*)malloc(sizeof(candidate_process_context_t));
+	if (cpc == NULL)
 		return NULL;
 
 	cpc->type = type;
@@ -1027,11 +1028,13 @@ static candidate_process_context_t* __add_slot(int type, int loader_id, int call
 	if (fd == -1) {
 		_E("[launchpad] Listening the socket to the type %d candidate process failed.",
 		   cpc->type);
+		free(cpc);
 		return NULL;
 	}
 
 	if (__poll_fd(fd, G_IO_IN, (GSourceFunc)__handle_loader_event, cpc->type, cpc->loader_id) < 0) {
 		close(fd);
+		free(cpc);
 		return NULL;
 	}
 
