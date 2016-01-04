@@ -782,8 +782,10 @@ static gboolean __handle_sigchild(gpointer data)
 		__launchpad_process_sigchld(&siginfo);
 		candidate_process_context_t *cpc = __find_slot_from_pid(siginfo.ssi_pid);
 
-		if (cpc != NULL)
+		if (cpc != NULL) {
+			cpc->prepared = false;
 			__prepare_candidate_process(cpc->type, cpc->loader_id);
+		}
 
 		cpc = __find_slot_from_caller_pid(siginfo.ssi_pid);
 		while (cpc) {
