@@ -47,7 +47,7 @@
 #define MAX_PENDING_CONNECTIONS 10
 #define CONNECT_RETRY_TIME 100 * 1000
 #define CONNECT_RETRY_COUNT 3
-#define AUL_PKT_HEADER_SIZE (sizeof(int) + sizeof(int))
+#define AUL_PKT_HEADER_SIZE (sizeof(int) + sizeof(int) + sizeof(int))
 
 static int __read_proc(const char *path, char *buf, int size)
 {
@@ -233,6 +233,7 @@ app_pkt_t *_recv_pkt_raw(int fd, int *clifd, struct ucred *cr)
 	unsigned char buf[AUL_SOCK_MAXBUFF];
 	int cmd;
 	int datalen;
+	int opt;
 
 	sun_size = sizeof(struct sockaddr_un);
 
@@ -266,6 +267,7 @@ retry_recv:
 	}
 	memcpy(&cmd, buf, sizeof(int));
 	memcpy(&datalen, buf + sizeof(int), sizeof(int));
+	memcpy(&opt, buf + sizeof(int) + sizeof(int), sizeof(int));
 
 	/* allocate for a null byte */
 	pkt = (app_pkt_t *)calloc(1, AUL_PKT_HEADER_SIZE + datalen + 1);
@@ -275,6 +277,7 @@ retry_recv:
 	}
 	pkt->cmd = cmd;
 	pkt->len = datalen;
+	pkt->opt = opt;
 
 	len = 0;
 	while (len != pkt->len) {
@@ -302,7 +305,7 @@ int _send_pkt_raw(int client_fd, app_pkt_t *pkt)
 		goto error;
 	}
 
-	pkt_size = sizeof(pkt->cmd) + sizeof(pkt->len) + pkt->len;
+	pkt_size = sizeof(pkt->cmd) + sizeof(pkt->len) + sizeof(pkt->opt) + pkt->len;
 
 	send_ret = send(client_fd, pkt, pkt_size, 0);
 	_D("send(%d) : %d / %d", client_fd, send_ret, pkt_size);

@@ -67,6 +67,7 @@
 typedef struct _app_pkt_t {
 	int cmd;
 	int len;
+	int opt;
 	unsigned char data[1];
 } app_pkt_t;
 
