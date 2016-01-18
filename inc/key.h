@@ -38,7 +38,7 @@ extern "C" {
 #define AUL_K_LOADER_PATH	"__AUL_LOADER_PATH__"
 #define AUL_K_WAYLAND_DISPLAY	"__AUL_WAYLAND_DISPLAY__"
 #define AUL_K_WAYLAND_WORKING_DIR "__AUL_WAYLAND_WORKING_DIR__"
-
+#define AUL_K_LOADER_ARGS	"__AUL_LOADER_ARGS__"
 
 #ifdef __cplusplus
 }
