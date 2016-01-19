@@ -8,10 +8,10 @@ INCLUDE(FindPkgConfig)
 PKG_CHECK_MODULES(${this_target_pool} REQUIRED
 	dlog
 	libsystemd-daemon
-	dbus-glib-1
 	vconf
 	security-manager
 	bundle
+	gio-2.0
 	)
 
 FOREACH(flag ${${this_target_pool}_CFLAGS})

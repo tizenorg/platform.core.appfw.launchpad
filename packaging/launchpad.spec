@@ -11,7 +11,7 @@ Source102:  launchpad-process-pool.socket
 
 BuildRequires:  cmake
 BuildRequires:  pkgconfig(bundle)
-BuildRequires:  pkgconfig(dbus-glib-1)
+BuildRequires:  pkgconfig(gio-2.0)
 BuildRequires:  pkgconfig(ecore)
 BuildRequires:  pkgconfig(dlog)
 BuildRequires:  pkgconfig(libsystemd-daemon)

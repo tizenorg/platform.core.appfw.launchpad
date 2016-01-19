@@ -14,21 +14,21 @@
  * limitations under the License.
  */
 
-#include <dbus/dbus.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/signalfd.h>
 #include <dirent.h>
+#include <gio/gio.h>
 
 #define AUL_DBUS_PATH			"/aul/dbus_handler"
 #define AUL_DBUS_SIGNAL_INTERFACE	"org.tizen.aul.signal"
 #define AUL_DBUS_APPDEAD_SIGNAL		"app_dead"
 #define AUL_DBUS_APPLAUNCH_SIGNAL	"app_launch"
 
-static DBusConnection *bus = NULL;
+static GDBusConnection *bus = NULL;
 static sigset_t oldmask;
 
-static inline void __socket_garbage_collector()
+static inline void __socket_garbage_collector(void)
 {
 	DIR *dp;
 	struct dirent *dentry;
@@ -45,8 +45,8 @@ static inline void __socket_garbage_collector()
 
 		snprintf(tmp, MAX_LOCAL_BUFSZ, "/proc/%s", dentry->d_name);
 		if (access(tmp, F_OK) < 0) {	/* Flawfinder: ignore */
-			snprintf(tmp, MAX_LOCAL_BUFSZ, "/run/user/%d/%s", getuid(),
-				 dentry->d_name);
+			snprintf(tmp, MAX_LOCAL_BUFSZ, "/run/user/%d/%s",
+					getuid(), dentry->d_name);
 			unlink(tmp);
 			continue;
 		}
@@ -56,74 +56,73 @@ static inline void __socket_garbage_collector()
 
 static inline int __send_app_dead_signal_dbus(int dead_pid)
 {
-	DBusMessage *message;
+	GError *err = NULL;
 
-	// send over session dbus for other applications
+	/* send over session dbus for other applications */
 	if (bus == NULL)
 		return -1;
 
-	message = dbus_message_new_signal(AUL_DBUS_PATH,
-					  AUL_DBUS_SIGNAL_INTERFACE,
-					  AUL_DBUS_APPDEAD_SIGNAL);
-
-	if (dbus_message_append_args(message,
-				     DBUS_TYPE_UINT32, &dead_pid,
-				     DBUS_TYPE_INVALID) == FALSE) {
-		_E("Failed to load data error");
+	if (g_dbus_connection_emit_signal(bus,
+					NULL,
+					AUL_DBUS_PATH,
+					AUL_DBUS_SIGNAL_INTERFACE,
+					AUL_DBUS_APPDEAD_SIGNAL,
+					g_variant_new("(u)", dead_pid),
+					&err) == FALSE) {
+		_E("g_dbus_connection_emit_signal() is failed: %s",
+					err->message);
+		g_error_free(err);
 		return -1;
 	}
 
-	if (dbus_connection_send(bus, message, NULL) == FALSE) {
-		_E("dbus send error");
+	if (g_dbus_connection_flush_sync(bus, NULL, &err) == FALSE) {
+		_E("g_dbus_connection_flush_sync() is failed: %s",
+					err->message);
+		g_error_free(err);
 		return -1;
 	}
 
-	dbus_connection_flush(bus);
-	dbus_message_unref(message);
-
-	_D("send_app_dead_signal_dbus done (pid=%d)\n",dead_pid);
+	_D("send_app_dead_signal_dbus done (pid=%d)", dead_pid);
 
 	return 0;
 }
 
 static inline int __send_app_launch_signal_dbus(int launch_pid, const char *app_id)
 {
-	DBusMessage *message;
+	GError *err = NULL;
 
 	if (bus == NULL)
 		return -1;
 
-	message = dbus_message_new_signal(AUL_DBUS_PATH,
-					  AUL_DBUS_SIGNAL_INTERFACE,
-					  AUL_DBUS_APPLAUNCH_SIGNAL);
-
-	if (dbus_message_append_args(message,
-				     DBUS_TYPE_UINT32, &launch_pid,
-				     DBUS_TYPE_STRING, &app_id,
-				     DBUS_TYPE_INVALID) == FALSE) {
-		_E("Failed to load data error");
+	if (g_dbus_connection_emit_signal(bus,
+					NULL,
+					AUL_DBUS_PATH,
+					AUL_DBUS_SIGNAL_INTERFACE,
+					AUL_DBUS_APPLAUNCH_SIGNAL,
+					g_variant_new("(us)", launch_pid, app_id),
+					&err) == FALSE) {
+		_E("g_dbus_connection_emit_signal() is failed: %s",
+					err->message);
+		g_error_free(err);
 		return -1;
 	}
 
-	if (dbus_connection_send(bus, message, NULL) == FALSE) {
-		_E("dbus send error");
+	if (g_dbus_connection_flush_sync(bus, NULL, &err) == FALSE) {
+		_E("g_dbus_connection_flush_sync() is failed: %s",
+					err->message);
+		g_error_free(err);
 		return -1;
 	}
 
-	dbus_connection_flush(bus);
-	dbus_message_unref(message);
-
-	_D("send_app_launch_signal_dbus done (pid=%d)",launch_pid);
+	_D("send_app_launch_signal_dbus done (pid=%d)", launch_pid);
 
 	return 0;
 }
 
-static int __sigchild_action(void *data)
+static int __sigchild_action(pid_t dead_pid)
 {
-	pid_t dead_pid;
 	char buf[MAX_LOCAL_BUFSZ];
 
-	dead_pid = (pid_t)(intptr_t)data;
 	if (dead_pid <= 0)
 		goto end;
 
@@ -149,7 +148,7 @@ static void __launchpad_process_sigchld(struct signalfd_siginfo *info)
 	while ((child_pid = waitpid(-1, &status, WNOHANG)) > 0) {
 		if (child_pid == child_pgid)
 			killpg(child_pgid, SIGKILL);
-		__sigchild_action((void *)(intptr_t)child_pid);
+		__sigchild_action(child_pid);
 	}
 
 	return;
@@ -158,14 +157,12 @@ static void __launchpad_process_sigchld(struct signalfd_siginfo *info)
 static inline int __signal_init(void)
 {
 	int i;
-	DBusError error;
+	GError *error = NULL;
 
-	dbus_error_init(&error);
-	dbus_threads_init_default();
-	bus = dbus_bus_get_private(DBUS_BUS_SESSION, &error);
+	bus = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, &error);
 	if (!bus) {
-		_E("Failed to connect to the D-BUS daemon: %s", error.message);
-		dbus_error_free(&error);
+		_E("Failed to connect to the D-BUS daemon: %s", error->message);
+		g_error_free(error);
 		return -1;
 	}
 
@@ -223,7 +220,7 @@ static inline int __signal_unblock_sigchld(void)
 static inline int __signal_fini(void)
 {
 	if (bus)
-		dbus_connection_close(bus);
+		g_object_unref(bus);
 
 #ifndef PRELOAD_ACTIVATE
 	int i;
