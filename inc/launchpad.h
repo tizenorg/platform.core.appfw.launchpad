@@ -17,11 +17,13 @@
 #ifndef __LAUNCHPAD_H__
 #define __LAUNCHPAD_H__
 
+#include <bundle.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef void (*loader_create_cb)(int argc, char **argv, int type, void *user_data);
+typedef void (*loader_create_cb)(bundle *extra, int type, void *user_data);
 typedef int (*loader_launch_cb)(int argc, char **argv, const char *app_path,
 		const char *appid, const char *pkgid, const char *pkg_type, void *user_data);
 typedef int (*loader_terminate_cb)(int argc, char **argv, void *user_data);
@@ -56,7 +58,6 @@ enum LAUNCHPAD_TYPE {
 };
 
 int launchpad_loader_main(int argc, char **argv, loader_lifecycle_callback_s *callbacks, loader_adapter_s *adapter, void *user_data);
-
 
 #ifdef __cplusplus
 }
