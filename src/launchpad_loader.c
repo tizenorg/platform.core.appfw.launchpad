@@ -72,11 +72,11 @@ static void __init_theme(void)
 		free(theme);
 }
 
-static void __loader_create_cb(int argc, char **argv, int type, void *user_data)
+static void __loader_create_cb(int type, void *user_data)
 {
 	int elm_init_cnt = 0;
 
-	__preload_init(argc, argv);
+	__preload_init(g_argc, g_argv);
 	__preload_init_for_process_pool();
 
 	elm_init_cnt = elm_init(g_argc, g_argv);

@@ -59,6 +59,8 @@ typedef struct {
 	guint source;
 	guint timer;
 	char *loader_path;
+	bundle_raw *loader_extra;
+	size_t loader_extra_sz;
 } candidate_process_context_t;
 
 typedef struct {
@@ -68,7 +70,7 @@ typedef struct {
 } loader_context_t;
 
 static GList *candidate_slot_list;
-static candidate_process_context_t* __add_slot(int type, int loader_id, int caller_pid, const char *loader_path);
+static candidate_process_context_t* __add_slot(int type, int loader_id, int caller_pid, const char *loader_path, bundle_raw *extra, size_t extra_sz);
 static int __remove_slot(int type, int loader_id);
 
 static int __make_loader_id()
@@ -377,7 +379,8 @@ static int __prepare_candidate_process(int type, int loader_id)
 	int pid;
 	char type_str[2] = {0, };
 	char loader_id_str[10] = {0, };
-	char *argv[] = {NULL, NULL, NULL, NULL};
+	char extra_sz_str[10] = {0, };
+	char *argv[] = {NULL, NULL, NULL, NULL, NULL, NULL};
 	candidate_process_context_t* cpt = __find_slot(type, loader_id);
 
 	if (cpt == NULL)
@@ -390,9 +393,12 @@ static int __prepare_candidate_process(int type, int loader_id)
 
 		type_str[0] = '0' + type;
 		snprintf(loader_id_str, sizeof(loader_id_str), "%d", loader_id);
+		snprintf(extra_sz_str, sizeof(extra_sz_str), "%d", (int)cpt->loader_extra_sz);
 		argv[0] = cpt->loader_path;
 		argv[1] = type_str;
 		argv[2] = loader_id_str;
+		argv[3] = extra_sz_str;
+		argv[4] = (char *)cpt->loader_extra;
 		if (execv(argv[0], argv) < 0)
 			_E("Failed to prepare candidate_process");
 		else
@@ -830,15 +836,18 @@ static int __dispatch_cmd_add_loader(bundle *kb)
 {
 	const char *add_slot_str = NULL;
 	const char *caller_pid = NULL;
+	bundle_raw *extra;
+	size_t extra_sz;
 	int lid;
 
 	_W("cmd add loader");
 	add_slot_str = bundle_get_val(kb, AUL_K_LOADER_PATH);
 	caller_pid = bundle_get_val(kb, AUL_K_CALLER_PID);
+	bundle_get_byte(kb, AUL_K_LOADER_EXTRA, (void **)&extra, &extra_sz);
 
 	if (add_slot_str && caller_pid) {
 		lid = __make_loader_id();
-		candidate_process_context_t *cpc = __add_slot(LAUNCHPAD_TYPE_DYNAMIC, lid, atoi(caller_pid), add_slot_str);
+		candidate_process_context_t *cpc = __add_slot(LAUNCHPAD_TYPE_DYNAMIC, lid, atoi(caller_pid), add_slot_str, extra, extra_sz);
 		if (cpc)
 			cpc->timer = g_timeout_add(2000, __handle_preparing_candidate_process, cpc);
 
@@ -1002,7 +1011,7 @@ end:
 	return G_SOURCE_CONTINUE;
 }
 
-static candidate_process_context_t* __add_slot(int type, int loader_id, int caller_pid, const char *loader_path)
+static candidate_process_context_t* __add_slot(int type, int loader_id, int caller_pid, const char *loader_path, bundle_raw *extra, size_t extra_sz)
 {
 	candidate_process_context_t *cpc;
 	int fd = -1;
@@ -1024,6 +1033,13 @@ static candidate_process_context_t* __add_slot(int type, int loader_id, int call
 	cpc->source = 0;
 	cpc->timer = 0;
 	cpc->loader_path = strdup(loader_path);
+
+	if (extra_sz > 0) {
+		cpc->loader_extra = (bundle_raw *)malloc(extra_sz);
+		memcpy(cpc->loader_extra, extra, extra_sz);
+	}
+
+	cpc->loader_extra_sz = extra_sz;
 
 	fd = __listen_candidate_process(cpc->type, cpc->loader_id);
 	if (fd == -1) {
@@ -1062,6 +1078,7 @@ static int __remove_slot(int type, int loader_id)
 
 			candidate_slot_list = g_list_remove_link(candidate_slot_list, iter);
 			free(cpc->loader_path);
+			free(cpc->loader_extra);
 			free(cpc);
 			return 0;
 		}
@@ -1110,23 +1127,23 @@ static int __init_sigchild_fd(void)
 
 static int __add_default_slots()
 {
-	if (__add_slot(LAUNCHPAD_TYPE_COMMON, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_DEFAULT) == NULL)
+	if (__add_slot(LAUNCHPAD_TYPE_COMMON, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_DEFAULT, NULL, 0) == NULL)
 		return -1;
 	if (__prepare_candidate_process(LAUNCHPAD_TYPE_COMMON, PAD_LOADER_ID_STATIC) != 0)
 		return -1;
 
-	if (__add_slot(LAUNCHPAD_TYPE_SW, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_DEFAULT) == NULL)
+	if (__add_slot(LAUNCHPAD_TYPE_SW, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_DEFAULT, NULL, 0) == NULL)
 		return -1;
 	if (__prepare_candidate_process(LAUNCHPAD_TYPE_SW, PAD_LOADER_ID_STATIC) != 0)
 		return -1;
 
-	if (__add_slot(LAUNCHPAD_TYPE_HW, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_DEFAULT) == NULL)
+	if (__add_slot(LAUNCHPAD_TYPE_HW, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_DEFAULT, NULL, 0) == NULL)
 		return -1;
 	if (__prepare_candidate_process(LAUNCHPAD_TYPE_HW, PAD_LOADER_ID_STATIC) != 0)
 		return -1;
 
 	if (access(LOADER_PATH_WRT, F_OK | X_OK) == 0) {
-		if (__add_slot(LAUNCHPAD_TYPE_WRT, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_WRT) == NULL)
+		if (__add_slot(LAUNCHPAD_TYPE_WRT, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_WRT, NULL, 0) == NULL)
 			return -1;
 		if (__prepare_candidate_process(LAUNCHPAD_TYPE_WRT, PAD_LOADER_ID_STATIC) != 0)
 			return -1;
