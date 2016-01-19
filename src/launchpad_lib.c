@@ -37,10 +37,8 @@ static int __loader_id;
 
 static void __at_exit_to_release_bundle()
 {
-	if (__bundle) {
+	if (__bundle)
 		bundle_free(__bundle);
-		__bundle = NULL;
-	}
 }
 
 static void __release_appid_at_exit(void)
@@ -232,6 +230,11 @@ static int __candidate_process_launchpad_main_loop(app_pkt_t* pkt,
 	if (menu_info != NULL)
 		_appinfo_free(menu_info);
 
+	if (__bundle) {
+		bundle_free(__bundle);
+		__bundle = NULL;
+	}
+
 	return ret;
 }
 
@@ -276,6 +279,7 @@ static int __before_loop(int argc, char **argv)
 {
 	int client_fd;
 	int ret = -1;
+	bundle *extra = NULL;
 #ifdef _APPFW_FEATURE_LOADER_PRIORITY
 	char err_str[MAX_LOCAL_BUFSZ] = { 0, };
 	int res = setpriority(PRIO_PROCESS, 0, LOWEST_PRIO);
@@ -291,10 +295,16 @@ static int __before_loop(int argc, char **argv)
 	/* TODO : should be add to check permission in the kernel*/
 	setsid();
 
+	if (argc > 3)
+		extra = bundle_decode((const bundle_raw *)argv[3], strlen(argv[3]));
+
 	if (__loader_callbacks->create) {
-		__loader_callbacks->create(argc, argv, __loader_type, __loader_user_data);
+		__loader_callbacks->create(extra, __loader_type, __loader_user_data);
 		ret = 0;
 	}
+
+	if (extra)
+		bundle_free(extra);
 
 #ifdef _APPFW_FEATURE_LOADER_PRIORITY
 	res = setpriority(PRIO_PGRP, 0, 0);
