@@ -32,6 +32,9 @@
 static Ecore_Fd_Handler *__fd_handler;
 static loader_receiver_cb __receiver;
 
+static int __argc;
+static char** __argv;
+
 static void __init_window(void)
 {
 	Evas_Object *win = elm_win_add(NULL, "package_name", ELM_WIN_BASIC);
@@ -72,14 +75,14 @@ static void __init_theme(void)
 		free(theme);
 }
 
-static void __loader_create_cb(int argc, char **argv, int type, void *user_data)
+static void __loader_create_cb(int type, void *user_data)
 {
 	int elm_init_cnt = 0;
 
-	__preload_init(argc, argv);
+	__preload_init(__argc, __argv);
 	__preload_init_for_process_pool();
 
-	elm_init_cnt = elm_init(g_argc, g_argv);
+	elm_init_cnt = elm_init(__argc, __argv);
 	_D("[candidate] elm init, returned: %d", elm_init_cnt);
 
 	switch (type) {
@@ -216,6 +219,9 @@ int main(int argc, char **argv)
 		.add_fd = __adapter_add_fd,
 		.remove_fd = __adapter_remove_fd
 	};
+
+	__argc = argc;
+	__argv = argv;
 
 	return launchpad_loader_main(argc, argv, &callbacks, &adapter, NULL);
 }

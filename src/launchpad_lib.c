@@ -34,6 +34,7 @@ static char *__appid;
 static char *__pkgid;
 static int __loader_type = LAUNCHPAD_TYPE_UNSUPPORTED;
 static int __loader_id;
+static bundle *__extra;
 
 static void __at_exit_to_release_bundle()
 {
@@ -292,7 +293,7 @@ static int __before_loop(int argc, char **argv)
 	setsid();
 
 	if (__loader_callbacks->create) {
-		__loader_callbacks->create(argc, argv, __loader_type, __loader_user_data);
+		__loader_callbacks->create(__loader_type, __loader_user_data);
 		ret = 0;
 	}
 
@@ -317,6 +318,17 @@ static int __after_loop(void)
 {
 	if (__loader_callbacks->terminate)
 		return __loader_callbacks->terminate(__argc, __argv, __loader_user_data);
+
+	return -1;
+}
+
+API int launchpad_loader_get_extra(bundle **b)
+{
+	if (b)
+		*b = __extra;
+
+	if (*b)
+		return 0;
 
 	return -1;
 }
@@ -359,6 +371,10 @@ API int launchpad_loader_main(int argc, char **argv,
 	__loader_user_data = user_data;
 	__argc = argc;
 	__argv = argv;
+	if (argc > 3)
+		__extra = bundle_decode((const bundle_raw *)argv[3], strlen(argv[3]));
+	else
+		__extra = NULL;
 
 	if (__before_loop(argc, argv) != 0)
 		return -1;
