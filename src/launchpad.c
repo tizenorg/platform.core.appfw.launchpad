@@ -70,6 +70,7 @@ typedef struct {
 static GList *candidate_slot_list;
 static candidate_process_context_t* __add_slot(int type, int loader_id, int caller_pid, const char *loader_path);
 static int __remove_slot(int type, int loader_id);
+static int __add_default_slots();
 
 static int __make_loader_id()
 {
@@ -908,6 +909,13 @@ static gboolean __handle_launch_event(gpointer data)
 		__real_send(clifd, ret);
 		clifd = -1;
 		goto end;
+	case PAD_CMD_MAKE_DEFAULT_SLOTS:
+		ret = __add_default_slots();
+		if (ret != 0)
+			_E("Failed to make default slots");
+		__real_send(clifd, ret);
+		clifd = -1;
+		goto end;
 	}
 
 	INIT_PERF(kb);
@@ -1144,11 +1152,6 @@ static int __before_loop(int argc, char **argv)
 
 	if (__init_launchpad_fd(argc, argv) != 0) {
 		_E("__init_launchpad_fd() failed");
-		return -1;
-	}
-
-	if (__add_default_slots() != 0) {
-		_E("__add_default_slots() failed");
 		return -1;
 	}
 
