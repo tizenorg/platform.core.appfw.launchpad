@@ -77,6 +77,7 @@ typedef struct {
 	char *app_path;
 	char *original_app_path;
 	char *pkg_type;
+	char *app_type;
 	char *hwacc;
 	char *taskmanage;
 	char *pkgid;
