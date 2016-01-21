@@ -388,6 +388,9 @@ appinfo_t* _appinfo_create(bundle *kb)
 	ptr = bundle_get_val(kb, AUL_K_PACKAGETYPE);
 	if (ptr)
 		menu_info->pkg_type = strdup(ptr);
+	ptr = bundle_get_val(kb, AUL_K_APP_TYPE);
+	if (ptr)
+		menu_info->app_type = strdup(ptr);
 	ptr = bundle_get_val(kb, AUL_K_HWACC);
 	if (ptr)
 		menu_info->hwacc = strdup(ptr);
@@ -458,6 +461,8 @@ void _appinfo_free(appinfo_t *menu_info)
 		free(menu_info->original_app_path);
 	if (menu_info->pkg_type != NULL)
 		free(menu_info->pkg_type);
+	if (menu_info->app_type != NULL)
+		free(menu_info->app_type);
 	if (menu_info->hwacc != NULL)
 		free(menu_info->hwacc);
 	if (menu_info->taskmanage != NULL)
@@ -482,7 +487,7 @@ void _modify_bundle(bundle * kb, int caller_pid, appinfo_t *menu_info, int cmd)
 
 	bundle_del(kb, AUL_K_APPID);
 	bundle_del(kb, AUL_K_EXEC);
-	bundle_del(kb, AUL_K_PACKAGETYPE);
+	bundle_del(kb, AUL_K_APP_TYPE);
 	bundle_del(kb, AUL_K_HWACC);
 	bundle_del(kb, AUL_K_TASKMANAGE);
 	bundle_del(kb, AUL_K_PKGID);

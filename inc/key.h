@@ -24,6 +24,7 @@ extern "C" {
 #define AUL_K_STARTTIME     "__AUL_STARTTIME__"
 #define AUL_K_EXEC      "__AUL_EXEC__"
 #define AUL_K_PACKAGETYPE   "__AUL_PACKAGETYPE__"
+#define AUL_K_APP_TYPE	"__AUL_APP_TYPE__"
 #define AUL_K_HWACC     "__AUL_HWACC__"
 #define AUL_K_APPID     "__AUL_APPID__"
 #define AUL_K_PID       "__AUL_PID__"
