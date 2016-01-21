@@ -47,6 +47,7 @@
 #define PROCESS_POOL_LAUNCHPAD_SOCK ".launchpad-process-pool-sock"
 #define LOADER_PATH_DEFAULT "/usr/bin/launchpad-loader"
 #define LOADER_PATH_WRT		"/usr/bin/wrt-loader"
+#define LOADER_PATH_JS_NATIVE	"/usr/bin/jsnative-loader"
 
 typedef struct {
 	int type;
@@ -273,26 +274,29 @@ static int __set_access(const char* appId, const char* pkg_type,
 	return security_manager_prepare_app(appId) == SECURITY_MANAGER_SUCCESS ? 0 : -1;
 }
 
-static int __get_launchpad_type(const char* internal_pool, const char* hwacc, const char *pkg_type)
+static int __get_launchpad_type(const char* internal_pool, const char* hwacc, const char *pkg_type, const char *app_type)
 {
 	int r;
 	int sys_hwacc = -1;
 
-	if (pkg_type && strncmp(pkg_type, "wgt", 3) == 0) {
+	if (pkg_type && strcmp(pkg_type, "wgt") == 0) {
 		_D("[launchpad] launchpad type: wrt");
 		return LAUNCHPAD_TYPE_WRT;
+	} else if (app_type && strcmp(app_type, "jsapp") == 0) {
+		_D("[launchpad] launchpad type: js_native");
+		return LAUNCHPAD_TYPE_JS_NATIVE;
 	}
 
-	if (internal_pool && strncmp(internal_pool, "true", 4) == 0 && hwacc) {
-		if (strncmp(hwacc, "NOT_USE", 7) == 0) {
+	if (internal_pool && strcmp(internal_pool, "true") == 0 && hwacc) {
+		if (strcmp(hwacc, "NOT_USE") == 0) {
 			_D("[launchpad] launchpad type: S/W(%d)", LAUNCHPAD_TYPE_SW);
 			return LAUNCHPAD_TYPE_SW;
 		}
-		if (strncmp(hwacc, "USE", 3) == 0) {
+		if (strcmp(hwacc, "USE") == 0) {
 			_D("[launchpad] launchpad type: H/W(%d)", LAUNCHPAD_TYPE_HW);
 			return LAUNCHPAD_TYPE_HW;
 		}
-		if (strncmp(hwacc, "SYS", 3) == 0) {
+		if (strcmp(hwacc, "SYS") == 0) {
 			r = vconf_get_int(VCONFKEY_SETAPPL_APP_HW_ACCELERATION, &sys_hwacc);
 			if (r != VCONF_OK)
 				_E("failed to get vconf int: %s", VCONFKEY_SETAPPL_APP_HW_ACCELERATION);
@@ -951,9 +955,11 @@ static gboolean __handle_launch_event(gpointer data)
 	SECURE_LOGD("internal pool : %s\n", menu_info->internal_pool);
 	SECURE_LOGD("hwacc : %s\n", menu_info->hwacc);
 	SECURE_LOGD("pkg_type : %s\n", menu_info->pkg_type);
+	SECURE_LOGD("app_type : %s\n", menu_info->app_type);
 
 	if ((loader_id = __get_loader_id(kb)) <= PAD_LOADER_ID_STATIC) {
-		type = __get_launchpad_type(menu_info->internal_pool, menu_info->hwacc, menu_info->pkg_type);
+		type = __get_launchpad_type(menu_info->internal_pool, menu_info->hwacc,
+				menu_info->pkg_type, menu_info->app_type);
 		if (type < 0) {
 			_E("failed to get launchpad type");
 			goto end;
@@ -1145,6 +1151,13 @@ static int __add_default_slots()
 		if (__add_slot(LAUNCHPAD_TYPE_WRT, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_WRT, NULL) == NULL)
 			return -1;
 		if (__prepare_candidate_process(LAUNCHPAD_TYPE_WRT, PAD_LOADER_ID_STATIC) != 0)
+			return -1;
+	}
+
+	if (access(LOADER_PATH_JS_NATIVE, F_OK | X_OK) == 0) {
+		if (__add_slot(LAUNCHPAD_TYPE_JS_NATIVE, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_JS_NATIVE, NULL) == NULL)
+			return -1;
+		if (__prepare_candidate_process(LAUNCHPAD_TYPE_JS_NATIVE, PAD_LOADER_ID_STATIC) != 0)
 			return -1;
 	}
 
