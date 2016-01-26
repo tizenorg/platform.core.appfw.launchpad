@@ -1,0 +1,4 @@
+@LIB_INSTALL_DIR@/libappcore-efl.so.1
+@LIB_INSTALL_DIR@/libappcore-common.so.1
+@LIB_INSTALL_DIR@/libcapi-appfw-application.so.0
+@LIB_INSTALL_DIR@/ecore_imf/modules/wayland/v-1.16/libwltextinputmodule.so
