@@ -40,6 +40,7 @@ extern "C" {
 #define AUL_K_LOADER_EXTRA	"__AUL_LOADER_EXTRA__"
 #define AUL_K_WAYLAND_DISPLAY	"__AUL_WAYLAND_DISPLAY__"
 #define AUL_K_WAYLAND_WORKING_DIR "__AUL_WAYLAND_WORKING_DIR__"
+#define AUL_K_ROOT_PATH		"__AUL_ROOT_PATH__"
 
 #ifdef __cplusplus
 }

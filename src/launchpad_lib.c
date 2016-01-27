@@ -32,6 +32,7 @@ static char **__argv;
 static bundle *__bundle;
 static char *__appid;
 static char *__pkgid;
+static char *__root_path;
 static int __loader_type = LAUNCHPAD_TYPE_UNSUPPORTED;
 static int __loader_id;
 
@@ -41,13 +42,16 @@ static void __at_exit_to_release_bundle()
 		bundle_free(__bundle);
 }
 
-static void __release_appid_at_exit(void)
+static void __release_at_exit(void)
 {
 	if (__appid != NULL)
 		free(__appid);
 
 	if (__pkgid != NULL)
 		free(__pkgid);
+
+	if (__root_path != NULL)
+		free(__root_path);
 }
 
 static int __set_access(const char* appId, const char* pkg_type,
@@ -149,6 +153,7 @@ static int __candidate_process_launchpad_main_loop(app_pkt_t* pkt,
 
 	__bundle = kb;
 	atexit(__at_exit_to_release_bundle);
+	atexit(__release_at_exit);
 
 	menu_info = _appinfo_create(kb);
 	if (menu_info == NULL) {
@@ -200,7 +205,13 @@ static int __candidate_process_launchpad_main_loop(app_pkt_t* pkt,
 		exit(-1);
 	}
 	aul_set_preinit_pkgid(__pkgid);
-	atexit(__release_appid_at_exit);
+
+	__root_path = strdup(menu_info->root_path);
+	if (__root_path == NULL) {
+		_E("Out of memory");
+		exit(-1);
+	}
+	aul_set_preinit_root_path(__root_path);
 
 	tmp_argv = _create_argc_argv(kb, &tmp_argc);
 

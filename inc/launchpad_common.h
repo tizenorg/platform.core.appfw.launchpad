@@ -83,6 +83,7 @@ typedef struct {
 	char *pkgid;
 	char *comp_type;
 	char *internal_pool;
+	char *root_path;
 } appinfo_t;
 
 char *_proc_get_cmdline_bypid(int pid);

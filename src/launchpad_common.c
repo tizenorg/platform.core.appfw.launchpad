@@ -406,6 +406,9 @@ appinfo_t* _appinfo_create(bundle *kb)
 	ptr = bundle_get_val(kb, AUL_K_INTERNAL_POOL);
 	if (ptr)
 		menu_info->internal_pool = strdup(ptr);
+	ptr = bundle_get_val(kb, AUL_K_ROOT_PATH);
+	if (ptr)
+		menu_info->root_path = strdup(ptr);
 
 	if (!_appinfo_get_app_path(menu_info)) {
 		_appinfo_free(menu_info);
@@ -473,6 +476,8 @@ void _appinfo_free(appinfo_t *menu_info)
 		free(menu_info->comp_type);
 	if (menu_info->internal_pool != NULL)
 		free(menu_info->internal_pool);
+	if (menu_info->root_path != NULL)
+		free(menu_info->root_path);
 
 	free(menu_info);
 }
