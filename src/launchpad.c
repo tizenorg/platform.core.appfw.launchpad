@@ -70,6 +70,7 @@ typedef struct {
 } loader_context_t;
 
 static GList *candidate_slot_list;
+static int sys_hwacc = -1;
 static candidate_process_context_t* __add_slot(int type, int loader_id, int caller_pid, const char *loader_path, const char *extra);
 static int __remove_slot(int type, int loader_id);
 static int __add_default_slots();
@@ -275,9 +276,6 @@ static int __set_access(const char* appId)
 
 static int __get_launchpad_type(const char* internal_pool, const char* hwacc, const char *app_type)
 {
-	int r;
-	int sys_hwacc = -1;
-
 	if (app_type && strcmp(app_type, "webapp") == 0) {
 		_D("[launchpad] launchpad type: wrt");
 		return LAUNCHPAD_TYPE_WRT;
@@ -296,12 +294,6 @@ static int __get_launchpad_type(const char* internal_pool, const char* hwacc, co
 			return LAUNCHPAD_TYPE_HW;
 		}
 		if (strcmp(hwacc, "SYS") == 0) {
-			r = vconf_get_int(VCONFKEY_SETAPPL_APP_HW_ACCELERATION, &sys_hwacc);
-			if (r != VCONF_OK)
-				_E("failed to get vconf int: %s", VCONFKEY_SETAPPL_APP_HW_ACCELERATION);
-
-			SECURE_LOGD("sys hwacc: %d", sys_hwacc);
-
 			if (sys_hwacc == SETTING_HW_ACCELERATION_ON) {
 				_D("[launchpad] launchpad type: H/W(%d)", LAUNCHPAD_TYPE_HW);
 				return LAUNCHPAD_TYPE_HW;
@@ -964,7 +956,7 @@ static gboolean __handle_launch_event(gpointer data)
 		}
 
 		if (menu_info->comp_type && strcmp(menu_info->comp_type, "svcapp") == 0)
-			loader_id == PAD_LOADER_ID_DIRECT;
+			loader_id = PAD_LOADER_ID_DIRECT;
 		else
 			loader_id = PAD_LOADER_ID_STATIC;
 	} else {
@@ -1166,6 +1158,17 @@ static int __add_default_slots()
 	return 0;
 }
 
+static void __vconf_cb(keynode_t *key, void *data)
+{
+	const char *name;
+
+	name = vconf_keynode_get_name(key);
+	if (name && strcmp(name, VCONFKEY_SETAPPL_APP_HW_ACCELERATION) == 0) {
+		sys_hwacc = vconf_keynode_get_int(key);
+		SECURE_LOGD("sys hwacc: %d", sys_hwacc);
+	}
+}
+
 static int __before_loop(int argc, char **argv)
 {
 	if (__init_sigchild_fd() != 0) {
@@ -1177,6 +1180,14 @@ static int __before_loop(int argc, char **argv)
 		_E("__init_launchpad_fd() failed");
 		return -1;
 	}
+
+	if (vconf_get_int(VCONFKEY_SETAPPL_APP_HW_ACCELERATION, &sys_hwacc) != VCONF_OK)
+		_E("Failed to get vconf int: %s", VCONFKEY_SETAPPL_APP_HW_ACCELERATION);
+
+	SECURE_LOGD("sys hwacc: %d", sys_hwacc);
+
+	if (vconf_notify_key_changed(VCONFKEY_SETAPPL_APP_HW_ACCELERATION, __vconf_cb, NULL) != 0)
+		_E("Failed to register callback for %s", VCONFKEY_SETAPPL_APP_HW_ACCELERATION);
 
 	return 0;
 }
