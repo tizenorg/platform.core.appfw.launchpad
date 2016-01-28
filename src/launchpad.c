@@ -1081,7 +1081,7 @@ static int __remove_slot(int type, int loader_id)
 			if (cpc->source > 0)
 				g_source_remove(cpc->source);
 
-			candidate_slot_list = g_list_remove_link(candidate_slot_list, iter);
+			candidate_slot_list = g_list_delete_link(candidate_slot_list, iter);
 			free(cpc->loader_path);
 			if (cpc->loader_extra)
 				free(cpc->loader_extra);
