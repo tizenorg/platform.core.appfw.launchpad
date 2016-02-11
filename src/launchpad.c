@@ -454,9 +454,35 @@ static int __send_launchpad_loader(candidate_process_context_t *cpc, app_pkt_t *
 	return pid;
 }
 
+static char *__get_libdir(const char *path)
+{
+	char *path_dup;
+	char buf[PATH_MAX];
+	char *ptr;
+
+	path_dup = strdup(path);
+	ptr = strrchr(path_dup, '/');
+	*ptr = '\0';
+
+	snprintf(buf, sizeof(buf), "%s/../lib/", path_dup);
+	free(path_dup);
+
+	if (access(buf, F_OK) == -1)
+		return NULL;
+
+	return strdup(buf);
+}
+
 static int __normal_fork_exec(int argc, char **argv)
 {
-	_D("start real fork and exec\n");
+	char *libdir = NULL;
+
+	_D("start real fork and exec");
+
+	libdir = __get_libdir(argv[0]);
+	if (libdir)
+		setenv("LD_LIBRARY_PATH", libdir, 1);
+	free(libdir);
 
 	if (execv(argv[0], argv) < 0) { /* Flawfinder: ignore */
 		if (errno == EACCES)
