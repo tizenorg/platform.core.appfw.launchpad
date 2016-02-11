@@ -16,10 +16,12 @@
 
 #define _GNU_SOURCE
 #include <stdio.h>
+#include <stdbool.h>
 #include <dlfcn.h>
 #include <sys/prctl.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <linux/limits.h>
 #include <Elementary.h>
 #include <bundle_internal.h>
 #include <aul.h>
@@ -108,12 +110,33 @@ static int __loader_launch_cb(int argc, char **argv, const char *app_path,
 
 static int __loader_terminate_cb(int argc, char **argv, void *user_data)
 {
-	void *handle = NULL;
+	void *handle;
 	int res;
 	int (*dl_main)(int, char **);
-	char err_str[MAX_LOCAL_BUFSZ] = { 0, };
+	char err_str[MAX_LOCAL_BUFSZ];
+	char old_cwd[PATH_MAX];
+	bool restore = false;
+	char *libdir = NULL;
 
 	SECURE_LOGD("[candidate] Launch real application (%s)", argv[0]);
+
+	if (getcwd(old_cwd, sizeof(old_cwd)) == NULL)
+		goto do_dlopen;
+
+	libdir = _get_libdir(argv[0]);
+	if (libdir == NULL)
+		goto do_dlopen;
+
+	/* To support 2.x applications which use their own shared libraries.
+	 * We set '-rpath' to make the dynamic linker looks in the CWD forcely,
+	 * so here we change working directory to find shared libraries well.
+	 */
+	if (chdir(libdir))
+		_E("failed to chdir: %d", errno);
+	else
+		restore = true;
+
+do_dlopen:
 	handle = dlopen(argv[0], RTLD_LAZY | RTLD_GLOBAL);
 	if (handle == NULL) {
 		_E("dlopen failed(%s). Please complile with -fPIE and link with -pie flag",
@@ -123,24 +146,31 @@ static int __loader_terminate_cb(int argc, char **argv, void *user_data)
 
 	dlerror();
 
+	if (restore && chdir(old_cwd))
+		_E("failed to chdir: %d", errno);
+
 	dl_main = dlsym(handle, "main");
-	if (dl_main != NULL)
-		res = dl_main(argc, argv);
-	else {
+	if (dl_main == NULL) {
 		_E("dlsym not founded(%s). Please export 'main' function", dlerror());
 		dlclose(handle);
 		goto do_exec;
 	}
 
+	free(libdir);
+	res = dl_main(argc, argv);
 	dlclose(handle);
+
 	return res;
 
 do_exec:
-	if (access(argv[0], F_OK | R_OK))
+	if (access(argv[0], F_OK | R_OK)) {
 		SECURE_LOGE("access() failed for file: \"%s\", error: %d (%s)",
 			argv[0], errno, strerror_r(errno, err_str, sizeof(err_str)));
-	else {
+	} else {
 		SECURE_LOGD("[candidate] Exec application (%s)", __argv[0]);
+		if (libdir)
+			setenv("LD_LIBRARY_PATH", libdir, 1);
+		free(libdir);
 		if (execv(argv[0], argv) < 0)
 			SECURE_LOGE("execv() failed for file: \"%s\", error: %d (%s)",
 				argv[0], errno, strerror_r(errno, err_str, sizeof(err_str)));

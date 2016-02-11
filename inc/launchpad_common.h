@@ -95,6 +95,7 @@ int _send_pkt_raw(int client_fd, app_pkt_t *pkt);
 int  _connect_to_launchpad(int type, int id);
 void _set_env(appinfo_t *menu_info, bundle * kb);
 char** _create_argc_argv(bundle * kb, int *margc);
+char *_get_libdir(const char *path);
 
 appinfo_t* _appinfo_create(bundle *kb);
 void _appinfo_free(appinfo_t *menu_info);
