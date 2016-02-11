@@ -27,6 +27,7 @@
 #include <errno.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <linux/limits.h>
 
 #include "launchpad_common.h"
 #include "key.h"
@@ -614,3 +615,21 @@ char** _create_argc_argv(bundle * kb, int *margc)
 	return argv;
 }
 
+char *_get_libdir(const char *path)
+{
+	char *path_dup;
+	char buf[PATH_MAX];
+	char *ptr;
+
+	path_dup = strdup(path);
+	ptr = strrchr(path_dup, '/');
+	*ptr = '\0';
+
+	snprintf(buf, sizeof(buf), "%s/../lib/", path_dup);
+	free(path_dup);
+
+	if (access(buf, F_OK) == -1)
+		return NULL;
+
+	return strdup(buf);
+}

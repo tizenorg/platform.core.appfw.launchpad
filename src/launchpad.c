@@ -456,7 +456,14 @@ static int __send_launchpad_loader(candidate_process_context_t *cpc, app_pkt_t *
 
 static int __normal_fork_exec(int argc, char **argv)
 {
-	_D("start real fork and exec\n");
+	char *libdir = NULL;
+
+	_D("start real fork and exec");
+
+	libdir = _get_libdir(argv[0]);
+	if (libdir)
+		setenv("LD_LIBRARY_PATH", libdir, 1);
+	free(libdir);
 
 	if (execv(argv[0], argv) < 0) { /* Flawfinder: ignore */
 		if (errno == EACCES)
