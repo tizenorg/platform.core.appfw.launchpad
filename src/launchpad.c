@@ -202,6 +202,8 @@ static int __accept_candidate_process(int server_fd, int *out_client_fd,
 		goto error;
 	}
 
+	_set_sock_option(client_fd, 1);
+
 	recv_ret = recv(client_fd, &client_pid, sizeof(client_pid), MSG_WAITALL);
 
 	if (recv_ret == -1) {
@@ -384,6 +386,7 @@ static int __prepare_candidate_process(int type, int loader_id)
 	pid = fork();
 	if (pid == 0) { /* child */
 		__signal_unblock_sigchld();
+		__signal_fini();
 
 		type_str[0] = '0' + type;
 		snprintf(loader_id_str, sizeof(loader_id_str), "%d", loader_id);

@@ -74,16 +74,21 @@ static int __read_proc(const char *path, char *buf, int size)
 	return ret;
 }
 
-static void __set_sock_option(int fd, int cli)
+void _set_sock_option(int fd, int cli)
 {
 	int size;
+	int flag;
 	struct timeval tv = { 5, 200 * 1000 };  /*  5.2 sec */
 
 	size = AUL_SOCK_MAXBUFF;
 	setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &size, sizeof(size));
 	setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size));
-	if (cli)
+	if (cli) {
 		setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+		flag = fcntl(fd, F_GETFD);
+		flag |= FD_CLOEXEC;
+		fcntl(fd, F_SETFD, flag);
+	}
 }
 
 static int __parse_app_path(const char *arg, char *out, int out_size)
@@ -212,7 +217,7 @@ int _create_server_sock(const char *name)
 		return -1;
 	}
 
-	__set_sock_option(fd, 0);
+	_set_sock_option(fd, 0);
 
 	if (listen(fd, 128) == -1) {
 		_E("listen error");
@@ -252,7 +257,7 @@ app_pkt_t *_recv_pkt_raw(int fd, int *clifd, struct ucred *cr)
 		return NULL;
 	}
 
-	__set_sock_option(*clifd, 1);
+	_set_sock_option(*clifd, 1);
 
 retry_recv:
 	/* receive header(cmd, datalen) */
