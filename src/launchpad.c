@@ -447,8 +447,6 @@ static int __send_launchpad_loader(candidate_process_context_t *cpc, app_pkt_t *
 		cpc->timer = 0;
 	}
 
-	__send_result_to_caller(clifd, pid, app_path); /* to AMD */
-
 	if (strcmp("uiapp", comp_type) == 0)
 		cpc->timer = g_timeout_add(5000, __handle_preparing_candidate_process, cpc);
 	else
