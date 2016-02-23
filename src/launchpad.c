@@ -32,6 +32,7 @@
 #include <systemd/sd-daemon.h>
 #include <glib.h>
 #include <linux/limits.h>
+#include <ttrace.h>
 
 #include "perf.h"
 #include "launchpad_common.h"
@@ -887,6 +888,7 @@ static gboolean __handle_launch_event(gpointer data)
 	int loader_id;
 	int ret;
 
+	traceBegin(TTRACE_TAG_APPLICATION_MANAGER, "LAUNCHPAD:LAUNCH");
 	pkt = _recv_pkt_raw(fd, &clifd, &cr);
 	if (!pkt) {
 		_E("packet is NULL");
@@ -1018,6 +1020,8 @@ end:
 		bundle_free(kb);
 	if (pkt != NULL)
 		free(pkt);
+
+	traceEnd(TTRACE_TAG_APPLICATION_MANAGER);
 
 	return G_SOURCE_CONTINUE;
 }

@@ -19,6 +19,7 @@ BuildRequires:  pkgconfig(elementary)
 BuildRequires:  pkgconfig(vconf)
 BuildRequires:  pkgconfig(security-manager)
 BuildRequires:  pkgconfig(aul)
+BuildRequires:  pkgconfig(ttrace)
 
 Requires(post): /sbin/ldconfig
 Requires(post): /usr/bin/systemctl
