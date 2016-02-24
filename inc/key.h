@@ -41,6 +41,7 @@ extern "C" {
 #define AUL_K_WAYLAND_DISPLAY	"__AUL_WAYLAND_DISPLAY__"
 #define AUL_K_WAYLAND_WORKING_DIR "__AUL_WAYLAND_WORKING_DIR__"
 #define AUL_K_ROOT_PATH		"__AUL_ROOT_PATH__"
+#define AUL_K_API_VERSION	"__AUL_API_VERSION__"
 
 #ifdef __cplusplus
 }

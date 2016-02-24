@@ -607,6 +607,9 @@ void _set_env(appinfo_t *menu_info, bundle * kb)
 	if (str != NULL)
 		setenv("XDG_RUNTIME_DIR", str, 1);
 
+	str = bundle_get_val(kb, AUL_K_API_VERSION);
+	if (str != NULL)
+		setenv("TIZEN_API_VERSION", str, 1);
 }
 
 char** _create_argc_argv(bundle * kb, int *margc)
