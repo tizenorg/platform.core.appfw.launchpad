@@ -41,13 +41,13 @@ static void __init_window(void)
 {
 	Evas_Object *win = elm_win_add(NULL, "package_name", ELM_WIN_BASIC);
 	if (win) {
-		aul_set_preinit_window(win);
+		elm_win_precreated_object_set(win);
 
 		Evas_Object *bg = elm_bg_add(win);
 		if (bg) {
 			evas_object_size_hint_weight_set(bg, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 			elm_win_resize_object_add(win, bg);
-			aul_set_preinit_background(bg);
+			elm_bg_precreated_object_set(bg);
 		} else {
 			_E("[candidate] elm_bg_add() failed");
 		}
@@ -56,7 +56,7 @@ static void __init_window(void)
 		if (conform) {
 			evas_object_size_hint_weight_set(conform, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
 			elm_win_resize_object_add(win, conform);
-			aul_set_preinit_conformant(conform);
+			elm_conformant_precreated_object_set(conform);
 		} else {
 			_E("elm_conformant_add() failed");
 		}
