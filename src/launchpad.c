@@ -660,7 +660,7 @@ static GSourceFuncs funcs = {
 	.finalize = NULL
 };
 
-static int __poll_fd(int fd, gushort events, GSourceFunc func, int type, int loader_id)
+static guint __poll_fd(int fd, gushort events, GSourceFunc func, int type, int loader_id)
 {
 	int r;
 	GPollFD *gpollfd;
@@ -669,14 +669,14 @@ static int __poll_fd(int fd, gushort events, GSourceFunc func, int type, int loa
 	src = g_source_new(&funcs, sizeof(GSource));
 	if (!src) {
 		_E("out of memory");
-		return -1;
+		return 0;
 	}
 
 	gpollfd = (GPollFD *) g_malloc(sizeof(GPollFD));
 	if (!gpollfd) {
 		_E("out of memory");
 		g_source_destroy(src);
-		return -1;
+		return 0;
 	}
 
 	gpollfd->events = events;
@@ -686,7 +686,7 @@ static int __poll_fd(int fd, gushort events, GSourceFunc func, int type, int loa
 	if (lc == NULL) {
 		g_free(gpollfd);
 		g_source_destroy(src);
-		return -1;
+		return 0;
 	}
 
 	lc->gpollfd = gpollfd;
@@ -702,7 +702,7 @@ static int __poll_fd(int fd, gushort events, GSourceFunc func, int type, int loa
 	if (r  == 0) {
 		g_free(gpollfd);
 		g_source_destroy(src);
-		return -1;
+		return 0;
 	}
 
 	return r;
@@ -764,7 +764,7 @@ static gboolean __handle_loader_event(gpointer data)
 
 			cpc->source = __poll_fd(client_fd, G_IO_IN | G_IO_HUP,
 							(GSourceFunc)__handle_loader_client_event, type, loader_id);
-			if (cpc->source < 0)
+			if (cpc->source == 0)
 				close(client_fd);
 		}
 	} else {
@@ -1058,7 +1058,7 @@ static candidate_process_context_t* __add_slot(int type, int loader_id, int call
 		return NULL;
 	}
 
-	if (__poll_fd(fd, G_IO_IN, (GSourceFunc)__handle_loader_event, cpc->type, cpc->loader_id) < 0) {
+	if (__poll_fd(fd, G_IO_IN, (GSourceFunc)__handle_loader_event, cpc->type, cpc->loader_id) == 0) {
 		close(fd);
 		free(cpc);
 		return NULL;
@@ -1110,7 +1110,7 @@ static int __init_launchpad_fd(int argc, char **argv)
 		return -1;
 	}
 
-	if (__poll_fd(fd, G_IO_IN, (GSourceFunc)__handle_launch_event, 0, 0) < 0) {
+	if (__poll_fd(fd, G_IO_IN, (GSourceFunc)__handle_launch_event, 0, 0) == 0) {
 		close(fd);
 		return -1;
 	}
@@ -1128,7 +1128,7 @@ static int __init_sigchild_fd(void)
 		return -1;
 	}
 
-	if (__poll_fd(fd, G_IO_IN, (GSourceFunc)__handle_sigchild, 0, 0) < 0) {
+	if (__poll_fd(fd, G_IO_IN, (GSourceFunc)__handle_sigchild, 0, 0) == 0) {
 		close(fd);
 		return -1;
 	}
