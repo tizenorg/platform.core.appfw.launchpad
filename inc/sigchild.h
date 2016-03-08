@@ -159,7 +159,7 @@ static inline int __signal_init(void)
 	int i;
 	GError *error = NULL;
 
-	bus = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, &error);
+	bus = g_bus_get_sync(G_BUS_TYPE_SYSTEM, NULL, &error);
 	if (!bus) {
 		_E("Failed to connect to the D-BUS daemon: %s", error->message);
 		g_error_free(error);
