@@ -48,6 +48,7 @@ SET(EXTRA_CFLAGS_common "${EXTRA_CFLAGS_common} -fvisibility=hidden")
 SET(EXTRA_CFLAGS_common "${EXTRA_CFLAGS_common} -fPIE")
 SET(EXTRA_CFLAGS_common "${EXTRA_CFLAGS_common} -fdata-sections -ffunction-sections -Wl,--gc-sections")
 SET(EXTRA_CFLAGS_common "${EXTRA_CFLAGS_common} -D_FILE_OFFSET_BITS=64")
+SET(EXTRA_CFLAGS_common "${EXTRA_CFLAGS_common} -Werror")
 
 SET(EXTRA_CFLAGS_pool "${EXTRA_CFLAGS_pool} ${EXTRA_CFLAGS_common}")
 SET(EXTRA_CFLAGS_loader "${EXTRA_CFLAGS_loader} ${EXTRA_CFLAGS_common}")
