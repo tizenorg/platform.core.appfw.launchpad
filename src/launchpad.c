@@ -871,6 +871,22 @@ static int __dispatch_cmd_remove_loader(bundle *kb)
 	return -1;
 }
 
+static int __check_caller_by_pid(int pid)
+{
+	int ret;
+	char buf[PATH_MAX] = { 0, };
+
+	ret = _proc_get_attr_by_pid(pid, buf, sizeof(buf));
+
+	if (ret < 0)
+		return -1;
+
+	if (strcmp(buf, "User") == 0 || strcmp(buf, "System") == 0)
+		return 0;
+
+	return -1;
+}
+
 static gboolean __handle_launch_event(gpointer data)
 {
 	loader_context_t *lc = (loader_context_t*) data;
@@ -892,6 +908,11 @@ static gboolean __handle_launch_event(gpointer data)
 	pkt = _recv_pkt_raw(fd, &clifd, &cr);
 	if (!pkt) {
 		_E("packet is NULL");
+		goto end;
+	}
+
+	if (__check_caller_by_pid(cr.pid) < 0) {
+		_E("Invalid caller pid");
 		goto end;
 	}
 

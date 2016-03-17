@@ -101,5 +101,6 @@ char *_get_libdir(const char *path);
 appinfo_t* _appinfo_create(bundle *kb);
 void _appinfo_free(appinfo_t *menu_info);
 char *_appinfo_get_app_path(appinfo_t *menu_info);
+int _proc_get_attr_by_pid(int pid, char *buf, int size);
 
 #endif

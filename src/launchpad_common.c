@@ -641,3 +641,17 @@ char *_get_libdir(const char *path)
 
 	return strdup(buf);
 }
+
+int _proc_get_attr_by_pid(int pid, char *buf, int size)
+{
+	char path[PATH_MAX] = { 0, };
+	int ret;
+
+	snprintf(path, sizeof(path), "/proc/%d/attr/current", pid);
+	ret = __read_proc(path, buf, size);
+	if (ret <= 0)
+		return -1;
+
+	return 0;
+}
+
