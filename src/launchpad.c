@@ -894,6 +894,10 @@ static gboolean __handle_launch_event(gpointer data)
 		_E("packet is NULL");
 		goto end;
 	}
+	if (_check_caller_by_pid(cr.pid) < 0) {
+		_E("Invalid caller pid");
+		goto end;
+	}
 
 	kb = bundle_decode(pkt->data, pkt->len);
 	if (!kb) {

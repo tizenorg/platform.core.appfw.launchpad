@@ -641,3 +641,20 @@ char *_get_libdir(const char *path)
 
 	return strdup(buf);
 }
+
+int _check_caller_by_pid(int pid)
+{
+	char buf[PATH_MAX] = { 0, };
+	int ret;
+
+	snprintf(buf, sizeof(buf), "/proc/%d/attr/current", pid);
+	ret = __read_proc(buf, buf, sizeof(buf));
+	if (ret <= 0)
+		return -1;
+
+	if (strcmp("User", buf) == 0 || strcmp("System", buf) == 0)
+		return 0;
+
+	return -1;
+}
+
