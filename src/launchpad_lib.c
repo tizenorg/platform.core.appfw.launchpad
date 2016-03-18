@@ -227,7 +227,7 @@ static int __candidate_process_launchpad_main_loop(app_pkt_t* pkt,
 
 	if (out_app_path != NULL && out_argc != NULL && out_argv != NULL) {
 		memset(out_app_path, '\0', strlen(out_app_path));
-		sprintf(out_app_path, "%s", app_path);
+		snprintf(out_app_path, strlen(out_app_path), "%s", app_path);
 
 		*out_argv = tmp_argv;
 		*out_argc = tmp_argc;
