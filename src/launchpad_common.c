@@ -32,7 +32,6 @@
 #include "launchpad_common.h"
 #include "key.h"
 
-#define MAX_PATH_LEN	1024
 #define BINSH_NAME  "/bin/sh"
 #define BINSH_SIZE  7
 #define VALGRIND_NAME   "/home/developer/sdk_tools/valgrind/usr/bin/valgrind"
