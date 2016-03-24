@@ -377,11 +377,15 @@ static int __prepare_candidate_process(int type, int loader_id)
 	int pid;
 	char type_str[2] = {0, };
 	char loader_id_str[10] = {0, };
-	char *argv[] = {NULL, NULL, NULL, NULL, NULL};
+	char argbuf[LOADER_ARG_LEN] = {' ', };
+	char *argv[] = {NULL, NULL, NULL, NULL, NULL, NULL};
 	candidate_process_context_t* cpt = __find_slot(type, loader_id);
 
 	if (cpt == NULL)
 		return -1;
+
+	argbuf[LOADER_ARG_LEN-1] = '\0';
+	argv[4] = argbuf;
 
 	cpt->last_exec_time = time(NULL);
 	pid = fork();
