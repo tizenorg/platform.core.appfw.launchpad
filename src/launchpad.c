@@ -670,11 +670,26 @@ static gboolean __glib_prepare(GSource *src, gint *timeout)
 	return FALSE;
 }
 
+static void __glib_finalize(GSource *src)
+{
+	GSList *fd_list;
+	GPollFD *gpollfd;
+
+	fd_list = src->poll_fds;
+	do {
+		gpollfd = (GPollFD *)fd_list->data;
+		close(gpollfd->fd);
+		g_free(gpollfd);
+
+		fd_list = fd_list->next;
+	} while (fd_list);
+}
+
 static GSourceFuncs funcs = {
 	.prepare = __glib_prepare,
 	.check = __glib_check,
 	.dispatch = __glib_dispatch,
-	.finalize = NULL
+	.finalize = __glib_finalize
 };
 
 static guint __poll_fd(int fd, gushort events, GSourceFunc func, int type, int loader_id)
