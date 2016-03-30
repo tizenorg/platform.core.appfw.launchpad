@@ -28,6 +28,11 @@ Requires(postun): /usr/bin/systemctl
 Requires(preun): /usr/bin/systemctl
 
 %define appfw_feature_priority_change 0
+%if "%{?profile}" == "tv"
+%define appfw_feature_lazy_loader 0
+%else
+%define appfw_feature_lazy_loader 1
+%endif
 
 %description
 Launchpad for launching applications
@@ -52,9 +57,13 @@ export FFLAGS="$FFLAGS -DTIZEN_DEBUG_ENABLE"
 %if 0%{?appfw_feature_priority_change}
 _APPFW_FEATURE_PRIORITY_CHANGE=ON
 %endif
+%if 0%{?appfw_feature_wrt_lazy_loader}
+_APPFW_FEATURE_LAZY_LOADER=ON
+%endif
 
 %cmake -DVERSION=%{version} \
 	-D_APPFW_FEATURE_PRIORITY_CHANGE:BOOL=${_APPFW_FEATURE_PRIORITY_CHANGE} \
+	-D_APPFW_FEATURE_LAZY_LOADER:BOOL=${_APPFW_FEATURE_LAZY_LOADER} \
 	.
 %__make %{?_smp_mflags}
 
