@@ -62,6 +62,7 @@ typedef struct {
 	guint timer;
 	char *loader_path;
 	char *loader_extra;
+	bool enabled;
 } candidate_process_context_t;
 
 typedef struct {
@@ -72,7 +73,8 @@ typedef struct {
 
 static GList *candidate_slot_list;
 static int sys_hwacc = -1;
-static candidate_process_context_t* __add_slot(int type, int loader_id, int caller_pid, const char *loader_path, const char *extra);
+static candidate_process_context_t* __add_slot(int type, int loader_id, int caller_pid, const char *loader_path,
+		const char *extra, bool enabled);
 static int __remove_slot(int type, int loader_id);
 static int __add_default_slots();
 
@@ -384,6 +386,9 @@ static int __prepare_candidate_process(int type, int loader_id)
 	if (cpt == NULL)
 		return -1;
 
+	if (!cpt->enabled)
+		return -1;
+
 	memset(argbuf, ' ', LOADER_ARG_LEN);
 	argbuf[LOADER_ARG_LEN-1] = '\0';
 	argv[4] = argbuf;
@@ -549,7 +554,7 @@ static int __prepare_exec(const char *appId, const char *app_path,
 }
 
 static int __launch_directly(const char *appid, const char *app_path, int clifd,
-				bundle* kb, appinfo_t *menu_info)
+				bundle* kb, appinfo_t *menu_info, candidate_process_context_t *cpc)
 {
 	char sock_path[PATH_MAX];
 	int pid = fork();
@@ -587,6 +592,13 @@ static int __launch_directly(const char *appid, const char *app_path, int clifd,
 		exit(-1);
 	}
 	SECURE_LOGD("==> real launch pid : %d %s\n", pid, app_path);
+
+#ifdef _APPFW_FEATURE_LAZY_LOADER
+	if (cpc && !cpc->enabled) {
+		cpc->enabled = true;
+		cpc->timer = g_timeout_add(5000, __handle_preparing_candidate_process, cpc);
+	}
+#endif
 
 	return pid;
 }
@@ -851,7 +863,7 @@ static int __dispatch_cmd_add_loader(bundle *kb)
 
 	if (add_slot_str && caller_pid) {
 		lid = __make_loader_id();
-		candidate_process_context_t *cpc = __add_slot(LAUNCHPAD_TYPE_DYNAMIC, lid, atoi(caller_pid), add_slot_str, extra);
+		candidate_process_context_t *cpc = __add_slot(LAUNCHPAD_TYPE_DYNAMIC, lid, atoi(caller_pid), add_slot_str, extra, true);
 		if (cpc)
 			cpc->timer = g_timeout_add(2000, __handle_preparing_candidate_process, cpc);
 
@@ -1010,7 +1022,7 @@ static gboolean __handle_launch_event(gpointer data)
 	if (loader_id == PAD_LOADER_ID_DIRECT ||
 		(cpc = __find_slot(type, loader_id)) == NULL) {
 		_W("Launch directly");
-		pid = __launch_directly(menu_info->appid, app_path, clifd, kb, menu_info);
+		pid = __launch_directly(menu_info->appid, app_path, clifd, kb, menu_info, NULL);
 	} else {
 		if (cpc->prepared) {
 			_W("Launch %d type process", type);
@@ -1022,11 +1034,11 @@ static gboolean __handle_launch_event(gpointer data)
 					pid = __send_launchpad_loader(cpc, pkt, app_path, clifd, menu_info->comp_type);
 				} else {
 					_W("Launch directly");
-					pid = __launch_directly(menu_info->appid, app_path, clifd, kb, menu_info);
+					pid = __launch_directly(menu_info->appid, app_path, clifd, kb, menu_info, NULL);
 				}
 		} else {
 			_W("Launch directly");
-			pid = __launch_directly(menu_info->appid, app_path, clifd, kb, menu_info);
+			pid = __launch_directly(menu_info->appid, app_path, clifd, kb, menu_info, cpc);
 		}
 	}
 
@@ -1052,7 +1064,8 @@ end:
 	return G_SOURCE_CONTINUE;
 }
 
-static candidate_process_context_t* __add_slot(int type, int loader_id, int caller_pid, const char *loader_path, const char *loader_extra)
+static candidate_process_context_t* __add_slot(int type, int loader_id, int caller_pid, const char *loader_path,
+		const char *loader_extra, bool enabled)
 {
 	candidate_process_context_t *cpc;
 	int fd = -1;
@@ -1075,6 +1088,7 @@ static candidate_process_context_t* __add_slot(int type, int loader_id, int call
 	cpc->timer = 0;
 	cpc->loader_path = strdup(loader_path);
 	cpc->loader_extra = loader_extra ? strdup(loader_extra) : NULL;
+	cpc->enabled = enabled;
 
 	fd = __listen_candidate_process(cpc->type, cpc->loader_id);
 	if (fd == -1) {
@@ -1164,30 +1178,35 @@ static int __init_sigchild_fd(void)
 
 static int __add_default_slots()
 {
-	if (__add_slot(LAUNCHPAD_TYPE_COMMON, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_DEFAULT, NULL) == NULL)
+	if (__add_slot(LAUNCHPAD_TYPE_COMMON, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_DEFAULT, NULL, true) == NULL)
 		return -1;
 	if (__prepare_candidate_process(LAUNCHPAD_TYPE_COMMON, PAD_LOADER_ID_STATIC) != 0)
 		return -1;
 
-	if (__add_slot(LAUNCHPAD_TYPE_SW, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_DEFAULT, NULL) == NULL)
+	if (__add_slot(LAUNCHPAD_TYPE_SW, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_DEFAULT, NULL, true) == NULL)
 		return -1;
 	if (__prepare_candidate_process(LAUNCHPAD_TYPE_SW, PAD_LOADER_ID_STATIC) != 0)
 		return -1;
 
-	if (__add_slot(LAUNCHPAD_TYPE_HW, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_DEFAULT, NULL) == NULL)
+	if (__add_slot(LAUNCHPAD_TYPE_HW, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_DEFAULT, NULL, true) == NULL)
 		return -1;
 	if (__prepare_candidate_process(LAUNCHPAD_TYPE_HW, PAD_LOADER_ID_STATIC) != 0)
 		return -1;
 
 	if (access(LOADER_PATH_WRT, F_OK | X_OK) == 0) {
-		if (__add_slot(LAUNCHPAD_TYPE_WRT, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_WRT, NULL) == NULL)
+#ifdef _APPFW_FEATURE_LAZY_LOADER
+		if (__add_slot(LAUNCHPAD_TYPE_WRT, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_WRT, NULL, false) == NULL)
+			return -1;
+#else
+		if (__add_slot(LAUNCHPAD_TYPE_WRT, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_WRT, NULL, true) == NULL)
 			return -1;
 		if (__prepare_candidate_process(LAUNCHPAD_TYPE_WRT, PAD_LOADER_ID_STATIC) != 0)
 			return -1;
+#endif
 	}
 
 	if (access(LOADER_PATH_JS_NATIVE, F_OK | X_OK) == 0) {
-		if (__add_slot(LAUNCHPAD_TYPE_JS_NATIVE, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_JS_NATIVE, NULL) == NULL)
+		if (__add_slot(LAUNCHPAD_TYPE_JS_NATIVE, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_JS_NATIVE, NULL, true) == NULL)
 			return -1;
 		if (__prepare_candidate_process(LAUNCHPAD_TYPE_JS_NATIVE, PAD_LOADER_ID_STATIC) != 0)
 			return -1;
