@@ -59,8 +59,14 @@ static inline int __send_app_dead_signal_dbus(int dead_pid)
 	GError *err = NULL;
 
 	/* send over session dbus for other applications */
-	if (bus == NULL)
-		return -1;
+	if (bus == NULL) {
+		bus = g_bus_get_sync(G_BUS_TYPE_SYSTEM, NULL, &err);
+		if (bus == NULL) {
+			_E("Failed to connect to the D-BUS daemon: %s", err->message);
+			g_error_free(err);
+			return -1;
+		}
+	}
 
 	if (g_dbus_connection_emit_signal(bus,
 					NULL,
@@ -91,8 +97,14 @@ static inline int __send_app_launch_signal_dbus(int launch_pid, const char *app_
 {
 	GError *err = NULL;
 
-	if (bus == NULL)
-		return -1;
+	if (bus == NULL) {
+		bus = g_bus_get_sync(G_BUS_TYPE_SYSTEM, NULL, &err);
+		if (bus == NULL) {
+			_E("Failed to connect to the D-BUS daemon: %s", err->message);
+			g_error_free(err);
+			return -1;
+		}
+	}
 
 	if (g_dbus_connection_emit_signal(bus,
 					NULL,
@@ -132,7 +144,7 @@ static int __sigchild_action(pid_t dead_pid)
 	unlink(buf);
 
 	__socket_garbage_collector();
- end:
+end:
 	return 0;
 }
 
@@ -163,7 +175,6 @@ static inline int __signal_init(void)
 	if (!bus) {
 		_E("Failed to connect to the D-BUS daemon: %s", error->message);
 		g_error_free(error);
-		return -1;
 	}
 
 	for (i = 0; i < _NSIG; i++) {
