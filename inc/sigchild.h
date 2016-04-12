@@ -143,7 +143,8 @@ static void __launchpad_process_sigchld(struct signalfd_siginfo *info)
 	pid_t child_pgid;
 
 	child_pgid = getpgid(info->ssi_pid);
-	_D("dead_pid = %d pgid = %d", info->ssi_pid, child_pgid);
+	_D("dead_pid = %d pgid = %d signo = %d status = %d", info->ssi_pid,
+		child_pgid, info->ssi_signo, info->ssi_status);
 
 	while ((child_pid = waitpid(-1, &status, WNOHANG)) > 0) {
 		if (child_pid == child_pgid)
