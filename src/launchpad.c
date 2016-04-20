@@ -50,6 +50,10 @@
 #define LOADER_PATH_WRT		"/usr/bin/wrt-loader"
 #define LOADER_PATH_JS_NATIVE	"/usr/bin/jsnative-loader"
 
+#define METHOD_TIMEOUT		0x1
+#define METHOD_VISIBILITY	0x2
+#define METHOD_DEMAND		0x4
+
 typedef struct {
 	int type;
 	bool prepared;
@@ -63,6 +67,8 @@ typedef struct {
 	char *loader_path;
 	char *loader_extra;
 	bool enabled;
+	int detection_method;
+	int timeout_val;
 } candidate_process_context_t;
 
 typedef struct {
@@ -74,7 +80,7 @@ typedef struct {
 static GList *candidate_slot_list;
 static int sys_hwacc = -1;
 static candidate_process_context_t* __add_slot(int type, int loader_id, int caller_pid, const char *loader_path,
-		const char *extra, bool enabled);
+		const char *extra, bool enabled, int detection_method, int timeout_val);
 static int __remove_slot(int type, int loader_id);
 static int __add_default_slots();
 
@@ -428,8 +434,18 @@ static gboolean __handle_preparing_candidate_process(gpointer user_data)
 	return G_SOURCE_REMOVE;
 }
 
+static void __set_timer(candidate_process_context_t *cpc)
+{
+	if (cpc == NULL)
+		return;
+
+	if (cpc->detection_method & METHOD_TIMEOUT)
+		cpc->timer = g_timeout_add(cpc->timeout_val,
+					__handle_preparing_candidate_process, cpc);
+}
+
 static int __send_launchpad_loader(candidate_process_context_t *cpc, app_pkt_t *pkt,
-				const char *app_path, int clifd, const char *comp_type)
+				const char *app_path, int clifd)
 {
 	char sock_path[PATH_MAX];
 	int pid = -1;
@@ -458,11 +474,7 @@ static int __send_launchpad_loader(candidate_process_context_t *cpc, app_pkt_t *
 		cpc->timer = 0;
 	}
 
-	if (strcmp("uiapp", comp_type) == 0)
-		cpc->timer = g_timeout_add(5000, __handle_preparing_candidate_process, cpc);
-	else
-		cpc->timer = g_timeout_add(2000, __handle_preparing_candidate_process, cpc);
-
+	__set_timer(cpc);
 	return pid;
 }
 
@@ -596,7 +608,7 @@ static int __launch_directly(const char *appid, const char *app_path, int clifd,
 #ifdef _APPFW_FEATURE_LAZY_LOADER
 	if (cpc && !cpc->enabled) {
 		cpc->enabled = true;
-		cpc->timer = g_timeout_add(5000, __handle_preparing_candidate_process, cpc);
+		__set_timer(cpc);
 	}
 #endif
 
@@ -842,13 +854,15 @@ static gboolean __handle_sigchild(gpointer data)
 	return G_SOURCE_CONTINUE;
 }
 
-static int __dispatch_cmd_visibility(bundle *kb)
+static int __dispatch_cmd_hint(bundle *kb, int detection_method)
 {
 	GList *iter = candidate_slot_list;
 
-	_W("cmd visibility");
+	_W("cmd hint %d", detection_method);
 	while (iter) {
 		candidate_process_context_t *cpc = (candidate_process_context_t*)iter->data;
+		if (!(cpc->detection_method & detection_method))
+			continue;
 
 		if (cpc->pid == CANDIDATE_NONE) {
 			if (cpc->timer > 0) {
@@ -878,10 +892,9 @@ static int __dispatch_cmd_add_loader(bundle *kb)
 
 	if (add_slot_str && caller_pid) {
 		lid = __make_loader_id();
-		candidate_process_context_t *cpc = __add_slot(LAUNCHPAD_TYPE_DYNAMIC, lid, atoi(caller_pid), add_slot_str, extra, true);
-		if (cpc)
-			cpc->timer = g_timeout_add(2000, __handle_preparing_candidate_process, cpc);
-
+		candidate_process_context_t *cpc = __add_slot(LAUNCHPAD_TYPE_DYNAMIC, lid,
+				atoi(caller_pid), add_slot_str, extra, true, METHOD_TIMEOUT | METHOD_VISIBILITY, 2000);
+		__set_timer(cpc);
 		return lid;
 	}
 
@@ -956,7 +969,7 @@ static gboolean __handle_launch_event(gpointer data)
 
 	switch (pkt->cmd) {
 	case PAD_CMD_VISIBILITY:
-		ret = __dispatch_cmd_visibility(kb);
+		ret = __dispatch_cmd_hint(kb, METHOD_VISIBILITY);
 		__real_send(clifd, ret);
 		clifd = -1;
 		goto end;
@@ -974,6 +987,11 @@ static gboolean __handle_launch_event(gpointer data)
 		ret = __add_default_slots();
 		if (ret != 0)
 			_E("Failed to make default slots");
+		__real_send(clifd, ret);
+		clifd = -1;
+		goto end;
+	case PAD_CMD_DEMAND:
+		ret = __dispatch_cmd_hint(kb, METHOD_DEMAND);
 		__real_send(clifd, ret);
 		clifd = -1;
 		goto end;
@@ -1041,12 +1059,12 @@ static gboolean __handle_launch_event(gpointer data)
 	} else {
 		if (cpc->prepared) {
 			_W("Launch %d type process", type);
-			pid = __send_launchpad_loader(cpc, pkt, app_path, clifd, menu_info->comp_type);
+			pid = __send_launchpad_loader(cpc, pkt, app_path, clifd);
 		} else if (cpc->type == LAUNCHPAD_TYPE_SW || cpc->type == LAUNCHPAD_TYPE_HW) {
 				cpc = __find_slot(LAUNCHPAD_TYPE_COMMON, loader_id);
 				if (cpc != NULL && cpc->prepared) {
 					_W("Launch common type process");
-					pid = __send_launchpad_loader(cpc, pkt, app_path, clifd, menu_info->comp_type);
+					pid = __send_launchpad_loader(cpc, pkt, app_path, clifd);
 				} else {
 					_W("Launch directly");
 					pid = __launch_directly(menu_info->appid, app_path, clifd, kb, menu_info, NULL);
@@ -1080,7 +1098,7 @@ end:
 }
 
 static candidate_process_context_t* __add_slot(int type, int loader_id, int caller_pid, const char *loader_path,
-		const char *loader_extra, bool enabled)
+		const char *loader_extra, bool enabled, int detection_method, int timeout_val)
 {
 	candidate_process_context_t *cpc;
 	int fd = -1;
@@ -1104,6 +1122,8 @@ static candidate_process_context_t* __add_slot(int type, int loader_id, int call
 	cpc->loader_path = strdup(loader_path);
 	cpc->loader_extra = loader_extra ? strdup(loader_extra) : NULL;
 	cpc->enabled = enabled;
+	cpc->detection_method = detection_method;
+	cpc->timeout_val = timeout_val;
 
 	fd = __listen_candidate_process(cpc->type, cpc->loader_id);
 	if (fd == -1) {
@@ -1193,27 +1213,32 @@ static int __init_sigchild_fd(void)
 
 static int __add_default_slots()
 {
-	if (__add_slot(LAUNCHPAD_TYPE_COMMON, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_DEFAULT, NULL, true) == NULL)
+	if (__add_slot(LAUNCHPAD_TYPE_COMMON, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_DEFAULT,
+			NULL, true, METHOD_TIMEOUT | METHOD_VISIBILITY, 5000) == NULL)
 		return -1;
 	if (__prepare_candidate_process(LAUNCHPAD_TYPE_COMMON, PAD_LOADER_ID_STATIC) != 0)
 		return -1;
 
-	if (__add_slot(LAUNCHPAD_TYPE_SW, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_DEFAULT, NULL, true) == NULL)
+	if (__add_slot(LAUNCHPAD_TYPE_SW, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_DEFAULT,
+		NULL, true, METHOD_TIMEOUT | METHOD_VISIBILITY, 5000) == NULL)
 		return -1;
 	if (__prepare_candidate_process(LAUNCHPAD_TYPE_SW, PAD_LOADER_ID_STATIC) != 0)
 		return -1;
 
-	if (__add_slot(LAUNCHPAD_TYPE_HW, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_DEFAULT, NULL, true) == NULL)
+	if (__add_slot(LAUNCHPAD_TYPE_HW, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_DEFAULT,
+		NULL, true, METHOD_TIMEOUT | METHOD_VISIBILITY, 5000) == NULL)
 		return -1;
 	if (__prepare_candidate_process(LAUNCHPAD_TYPE_HW, PAD_LOADER_ID_STATIC) != 0)
 		return -1;
 
 	if (access(LOADER_PATH_WRT, F_OK | X_OK) == 0) {
 #ifdef _APPFW_FEATURE_LAZY_LOADER
-		if (__add_slot(LAUNCHPAD_TYPE_WRT, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_WRT, NULL, false) == NULL)
+		if (__add_slot(LAUNCHPAD_TYPE_WRT, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_WRT,
+				NULL, false, METHOD_TIMEOUT | METHOD_DEMAND, 5000) == NULL)
 			return -1;
 #else
-		if (__add_slot(LAUNCHPAD_TYPE_WRT, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_WRT, NULL, true) == NULL)
+		if (__add_slot(LAUNCHPAD_TYPE_WRT, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_WRT,
+				NULL, true, METHOD_TIMEOUT | METHOD_DEMAND, 5000) == NULL)
 			return -1;
 		if (__prepare_candidate_process(LAUNCHPAD_TYPE_WRT, PAD_LOADER_ID_STATIC) != 0)
 			return -1;
@@ -1221,7 +1246,8 @@ static int __add_default_slots()
 	}
 
 	if (access(LOADER_PATH_JS_NATIVE, F_OK | X_OK) == 0) {
-		if (__add_slot(LAUNCHPAD_TYPE_JS_NATIVE, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_JS_NATIVE, NULL, true) == NULL)
+		if (__add_slot(LAUNCHPAD_TYPE_JS_NATIVE, PAD_LOADER_ID_STATIC, 0, LOADER_PATH_JS_NATIVE,
+				NULL, true, METHOD_TIMEOUT | METHOD_VISIBILITY, 5000) == NULL)
 			return -1;
 		if (__prepare_candidate_process(LAUNCHPAD_TYPE_JS_NATIVE, PAD_LOADER_ID_STATIC) != 0)
 			return -1;
