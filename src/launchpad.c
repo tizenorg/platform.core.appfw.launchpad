@@ -34,6 +34,20 @@
 #include <linux/limits.h>
 #include <ttrace.h>
 
+// required by namespace
+#include <sys/wait.h>
+#include <sys/types.h>
+#include <sys/utsname.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sched.h>
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/resource.h>
+// required by namespace
+
 #include "perf.h"
 #include "launchpad_common.h"
 #include "sigchild.h"
@@ -595,7 +609,7 @@ static int __launch_directly(const char *appid, const char *app_path, int clifd,
 	if (pid == 0) {
 		PERF("fork done");
 		_D("lock up test log(no error) : fork done");
-
+		_E("FORK =====================================================> %d (namespace)", getpid());
 		__signal_unblock_sigchld();
 		__signal_fini();
 
@@ -622,6 +636,7 @@ static int __launch_directly(const char *appid, const char *app_path, int clifd,
 
 		exit(-1);
 	}
+	_E("FORK =====================================================> %d (outside)", pid);
 	SECURE_LOGD("==> real launch pid : %d %s\n", pid, app_path);
 
 #ifdef _APPFW_FEATURE_LAZY_LOADER
@@ -1388,10 +1403,11 @@ static void __set_priority(void)
 }
 #endif
 
+#define errExit(msg) do { perror(msg); exit(EXIT_FAILURE); } while(0)
+
 int main(int argc, char **argv)
 {
 	GMainLoop *mainloop = NULL;
-
 	mainloop = g_main_loop_new(NULL, FALSE);
 	if (!mainloop) {
 		_E("Failed to create glib main loop");
@@ -1402,6 +1418,29 @@ int main(int argc, char **argv)
 		_E("process-pool Initialization failed!\n");
 		return -1;
 	}
+
+    // create new PID namespace. It must be created here (after dbus threats are spawn).
+    if (unshare(CLONE_NEWPID) < 0) {
+        _E("Failed in unshare");
+		errExit("unshare");
+    }
+
+    // this will prevent from error OUT_OF_MEMORY
+    struct rlimit limit = {512*1024, 1024*1024};
+    if (setrlimit(RLIMIT_DATA, &limit) < 0) {
+        _E("Failed in setrlimit %s", strerror(errno));
+        errExit("setrlimit");
+    }
+
+    // this will create pid namespace
+    pid_t pid = fork();
+    if (pid == 0) {
+        // child in namespace
+        _E("I'm namespace holder! My pid is %d", getpid());
+        sleep(3600);
+        _E("Bye !");
+        return 0;
+    }
 
 #ifdef _APPFW_FEATURE_PRIORITY_CHANGE
 	__set_priority();
