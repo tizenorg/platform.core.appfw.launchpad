@@ -205,7 +205,7 @@ int _create_server_sock(const char *name)
 	unlink(saddr.sun_path);
 
 	if (bind(fd, (struct sockaddr *)&saddr, sizeof(saddr)) < 0) {
-		_E("bind error");
+		_E("bind error %s", strerror(errno));
 		close(fd);
 		return -1;
 	}
