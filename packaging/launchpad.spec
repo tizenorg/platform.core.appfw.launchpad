@@ -28,11 +28,7 @@ Requires(postun): /usr/bin/systemctl
 Requires(preun): /usr/bin/systemctl
 
 %define appfw_feature_priority_change 0
-%if "%{?profile}" == "tv"
 %define appfw_feature_lazy_loader 0
-%else
-%define appfw_feature_lazy_loader 1
-%endif
 
 %description
 Launchpad for launching applications
