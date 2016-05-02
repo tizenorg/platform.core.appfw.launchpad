@@ -116,6 +116,15 @@ static int __loader_launch_cb(int argc, char **argv, const char *app_path,
 	return 0;
 }
 
+static void __close_fds(void)
+{
+	int iter_fd;
+	int max_fd = sysconf(_SC_OPEN_MAX);
+
+	for (iter_fd = 3; iter_fd <= max_fd; iter_fd++)
+		close(iter_fd);
+}
+
 static int __loader_terminate_cb(int argc, char **argv, void *user_data)
 {
 	void *handle;
@@ -178,6 +187,7 @@ do_exec:
 				strerror_r(errno, err_str, sizeof(err_str)));
 	} else {
 		SECURE_LOGD("[candidate] Exec application (%s)", __argv[0]);
+		__close_fds();
 		if (libdir)
 			setenv("LD_LIBRARY_PATH", libdir, 1);
 		free(libdir);
