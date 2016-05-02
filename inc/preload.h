@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Samsung Electronics Co., Ltd All Rights Reserved
+ * Copyright (c) 2015 - 2016 Samsung Electronics Co., Ltd All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the License);
  * you may not use this file except in compliance with the License.
@@ -108,7 +108,7 @@ static inline int __change_cmdline(char *cmdline)
 static inline void __preload_exec(int argc, char **argv)
 {
 	void *handle = NULL;
-	int (*dl_main) (int, char **);
+	int (*dl_main)(int, char **);
 	char *error = NULL;
 
 	if (!preload_initialized)
@@ -134,10 +134,9 @@ static inline void __preload_exec(int argc, char **argv)
 		}
 
 #ifdef _APPFW_FEATURE_PRIORITY_CHANGE
-		int res = setpriority(PRIO_PROCESS, 0, 0);
-		if (res == -1)
-		{
-			SECURE_LOGE("Setting process (%d) priority to 0 failed, errno: %d (%s)",
+		if (setpriority(PRIO_PROCESS, 0, 0) == -1) {
+			SECURE_LOGE("Setting process (%d) priority to 0 failed,"
+					" errno: %d (%s)",
 					getpid(), errno, strerror(errno));
 		}
 #endif
