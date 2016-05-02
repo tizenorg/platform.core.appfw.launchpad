@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2015 - 2016 Samsung Electronics Co., Ltd All Rights Reserved
+ *
+ * Licensed under the Apache License, Version 2.0 (the License);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an AS IS BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,6 +39,7 @@
 
 #define AUL_PR_NAME 16
 #define LOWEST_PRIO 20
+#define CHAR_SIZE (sizeof(char))
 
 static loader_lifecycle_callback_s *__loader_callbacks;
 static loader_adapter_s *__loader_adapter;
@@ -54,10 +71,10 @@ static void __release_at_exit(void)
 		free(__root_path);
 }
 
-static int __set_access(const char* appId, const char* pkg_type,
-			const char* app_path)
+static int __set_access(const char *appid, const char *pkg_type,
+		const char *app_path)
 {
-	return security_manager_prepare_app(appId) == SECURITY_MANAGER_SUCCESS ? 0 : -1;
+	return security_manager_prepare_app(appid);;
 }
 
 static int __prepare_exec(const char *appid, const char *app_path,
@@ -65,21 +82,24 @@ static int __prepare_exec(const char *appid, const char *app_path,
 {
 	const char *file_name = NULL;
 	char process_name[AUL_PR_NAME] = { 0, };
-	int ret = 0;
+	int ret;
 
 	__preexec_run(pkg_type, appid, app_path);
 
 	/* SET PRIVILEGES*/
 	SECURE_LOGD("[candidata] appid : %s / pkg_type : %s / app_path : %s",
 		appid, pkg_type, app_path);
-	if ((ret = __set_access(appid, pkg_type, app_path)) < 0) {
-		_D("fail to set privileges - check your package's credential : %d\n", ret);
+	ret = __set_access(appid, pkg_type, app_path);
+	if (ret < 0) {
+		_D("fail to set privileges - check your package's credential: "
+				"%d\n", ret);
 		return -1;
 	}
 
 	/*
 	 * SET DUMPABLE - for coredump
-	 * This dumpable flag should be set after calling perm_app_set_privilege()
+	 * This dumpable flag should be set after
+	 * calling perm_app_set_privilege().
 	 */
 	prctl(PR_SET_DUMPABLE, 1);
 
@@ -102,7 +122,7 @@ static int __prepare_exec(const char *appid, const char *app_path,
 }
 
 static int __default_launch_cb(bundle *kb, const char *appid,
-				const char *app_path, const char *pkg_type, int loader_type)
+		const char *app_path, const char *pkg_type, int loader_type)
 {
 	char err_str[MAX_LOCAL_BUFSZ] = { 0, };
 #ifdef _APPFW_FEATURE_PRIORITY_CHANGE
@@ -112,29 +132,33 @@ static int __default_launch_cb(bundle *kb, const char *appid,
 	_D("high_priority: %s", high_priority);
 	if (strncmp(high_priority, "true", 4) == 0) {
 		res = setpriority(PRIO_PROCESS, 0, -10);
-		if (res == -1)
-			SECURE_LOGE("Setting process (%d) priority to -10 failed, errno: %d (%s)",
-					getpid(), errno, strerror_r(errno, err_str, sizeof(err_str)));
+		if (res == -1) {
+			SECURE_LOGE("Setting process (%d) priority "
+				"to -10 failed, errno: %d (%s)",
+				getpid(), errno,
+				strerror_r(errno, err_str, sizeof(err_str)));
+		}
 	}
 	bundle_del(kb, AUL_K_HIGHPRIORITY);
 #endif
 
 	if (__prepare_exec(appid, app_path, pkg_type, loader_type) < 0) {
 		_E("__candidate_process_prepare_exec() failed");
-		if (access(app_path, F_OK | R_OK))
-			SECURE_LOGE("access() failed for file: \"%s\", error: %d (%s)",
-					app_path, errno, strerror_r(errno, err_str, sizeof(err_str)));
-
+		if (access(app_path, F_OK | R_OK)) {
+			SECURE_LOGE("access() failed for file: \"%s\", "
+				"error: %d (%s)", app_path, errno,
+				strerror_r(errno, err_str, sizeof(err_str)));
+		}
 		exit(-1);
 	}
 
 	return 0;
 }
 
-static int __candidate_process_launchpad_main_loop(app_pkt_t* pkt,
-	char* out_app_path, int* out_argc, char ***out_argv, int type)
+static int __candidate_process_launchpad_main_loop(app_pkt_t *pkt,
+		char *out_app_path, int *out_argc, char ***out_argv, int type)
 {
-	bundle *kb = NULL;
+	bundle *kb;
 	appinfo_t *menu_info = NULL;
 	const char *app_path = NULL;
 	int tmp_argc = 0;
@@ -184,7 +208,8 @@ static int __candidate_process_launchpad_main_loop(app_pkt_t* pkt,
 		exit(-1);
 	}
 
-	_modify_bundle(kb, /*cr.pid - unused parameter*/ 0, menu_info, pkt->cmd);
+	_modify_bundle(kb, /*cr.pid - unused parameter*/ 0, menu_info,
+			pkt->cmd);
 
 	__appid = strdup(menu_info->appid);
 	if (__appid == NULL) {
@@ -218,8 +243,9 @@ static int __candidate_process_launchpad_main_loop(app_pkt_t* pkt,
 	__default_launch_cb(kb, __appid, app_path, menu_info->pkg_type, type);
 
 	if (__loader_callbacks->launch) {
-		ret = __loader_callbacks->launch(tmp_argc, tmp_argv, app_path, __appid, __pkgid,
-						menu_info->pkg_type, __loader_user_data);
+		ret = __loader_callbacks->launch(tmp_argc, tmp_argv, app_path,
+				__appid, __pkgid, menu_info->pkg_type,
+				__loader_user_data);
 	}
 
 	/* SET ENVIROMENT*/
@@ -233,10 +259,13 @@ static int __candidate_process_launchpad_main_loop(app_pkt_t* pkt,
 		*out_argc = tmp_argc;
 		(*out_argv)[0] = out_app_path;
 
-		for (i = 0; i < *out_argc; i++)
-			SECURE_LOGD("input argument %d : %s##", i, (*out_argv)[i]);
-	} else
+		for (i = 0; i < *out_argc; i++) {
+			SECURE_LOGD("input argument %d : %s##", i,
+					(*out_argv)[i]);
+		}
+	} else {
 		exit(-1);
+	}
 
 	if (menu_info != NULL)
 		_appinfo_free(menu_info);
@@ -256,7 +285,7 @@ static void __receiver_cb(int fd)
 	app_pkt_t *pkt;
 
 	_D("[candidate] ECORE_FD_READ");
-	pkt = (app_pkt_t*) malloc(sizeof(char) * AUL_SOCK_MAXBUFF);
+	pkt = (app_pkt_t *)malloc(CHAR_SIZE * AUL_SOCK_MAXBUFF);
 	if (!pkt) {
 		_D("[candidate] out of memory1");
 		exit(-1);
@@ -295,9 +324,11 @@ static int __before_loop(int argc, char **argv)
 	char err_str[MAX_LOCAL_BUFSZ] = { 0, };
 	int res = setpriority(PRIO_PROCESS, 0, LOWEST_PRIO);
 
-	if (res == -1)
-		SECURE_LOGE("Setting process (%d) priority to %d failed, errno: %d (%s)",
-			getpid(), LOWEST_PRIO, errno, strerror_r(errno, err_str, sizeof(err_str)));
+	if (res == -1) {
+		SECURE_LOGE("Setting process (%d) priority to %d failed, "
+				"errno: %d (%s)", getpid(), LOWEST_PRIO, errno,
+				strerror_r(errno, err_str, sizeof(err_str)));
+	}
 #endif
 	__preexec_init(argc, argv);
 
@@ -306,11 +337,14 @@ static int __before_loop(int argc, char **argv)
 	/* TODO : should be add to check permission in the kernel*/
 	setsid();
 
-	if (argc > 3)
-		extra = bundle_decode((const bundle_raw *)argv[3], strlen(argv[3]));
+	if (argc > 3) {
+		extra = bundle_decode((bundle_raw *)argv[3],
+				strlen(argv[3]));
+	}
 
 	if (__loader_callbacks->create) {
-		__loader_callbacks->create(extra, __loader_type, __loader_user_data);
+		__loader_callbacks->create(extra, __loader_type,
+				__loader_user_data);
 		ret = 0;
 	}
 
@@ -319,9 +353,11 @@ static int __before_loop(int argc, char **argv)
 
 #ifdef _APPFW_FEATURE_LOADER_PRIORITY
 	res = setpriority(PRIO_PGRP, 0, 0);
-	if (res == -1)
-		SECURE_LOGE("Setting process (%d) priority to 0 failed, errno: %d (%s)",
-			getpid(), errno, strerror_r(errno, err_str, sizeof(err_str)));
+	if (res == -1) {
+		SECURE_LOGE("Setting process (%d) priority to 0 failed, "
+				"errno: %d (%s)", getpid(), errno,
+				strerror_r(errno, err_str, sizeof(err_str)));
+	}
 #endif
 	client_fd = _connect_to_launchpad(__loader_type, __loader_id);
 	if (client_fd == -1) {
@@ -336,15 +372,17 @@ static int __before_loop(int argc, char **argv)
 
 static int __after_loop(void)
 {
-	if (__loader_callbacks->terminate)
-		return __loader_callbacks->terminate(__argc, __argv, __loader_user_data);
+	if (__loader_callbacks->terminate) {
+		return __loader_callbacks->terminate(__argc, __argv,
+				__loader_user_data);
+	}
 
 	return -1;
 }
 
 API int launchpad_loader_main(int argc, char **argv,
-				loader_lifecycle_callback_s *callbacks, loader_adapter_s *adapter,
-				void *user_data)
+		loader_lifecycle_callback_s *callbacks,
+		loader_adapter_s *adapter, void *user_data)
 {
 	if (argc < 3) {
 		_E("too few argument.");
@@ -389,3 +427,4 @@ API int launchpad_loader_main(int argc, char **argv,
 
 	return __after_loop();
 }
+

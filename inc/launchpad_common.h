@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Samsung Electronics Co., Ltd All Rights Reserved
+ * Copyright (c) 2015 - 2016 Samsung Electronics Co., Ltd All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the License);
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef __LAUNCHPAD_COMMON__
-#define __LAUNCHPAD_COMMON__
+#ifndef __LAUNCHPAD_COMMON_H__
+#define __LAUNCHPAD_COMMON_H__
 
 #define _GNU_SOURCE
 
@@ -89,20 +89,21 @@ typedef struct {
 } appinfo_t;
 
 char *_proc_get_cmdline_bypid(int pid);
-void _modify_bundle(bundle * kb, int caller_pid, appinfo_t *menu_info, int cmd);
+void _modify_bundle(bundle *kb, int caller_pid, appinfo_t *menu_info, int cmd);
 
 int _create_server_sock(const char *name);
 app_pkt_t *_recv_pkt_raw(int fd, int *clifd, struct ucred *cr);
 int _send_pkt_raw(int client_fd, app_pkt_t *pkt);
 int  _connect_to_launchpad(int type, int id);
 void _set_sock_option(int fd, int cli);
-void _set_env(appinfo_t *menu_info, bundle * kb);
-char** _create_argc_argv(bundle * kb, int *margc);
+void _set_env(appinfo_t *menu_info, bundle *kb);
+char **_create_argc_argv(bundle *kb, int *margc);
 char *_get_libdir(const char *path);
 
-appinfo_t* _appinfo_create(bundle *kb);
+appinfo_t *_appinfo_create(bundle *kb);
 void _appinfo_free(appinfo_t *menu_info);
 char *_appinfo_get_app_path(appinfo_t *menu_info);
 int _proc_get_attr_by_pid(int pid, char *buf, int size);
 
-#endif
+#endif /* __LAUNCHPAD_COMMON_H__ */
+

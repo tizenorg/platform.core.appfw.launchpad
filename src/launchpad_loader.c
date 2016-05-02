@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Samsung Electronics Co., Ltd All Rights Reserved
+ * Copyright (c) 2015 - 2016 Samsung Electronics Co., Ltd All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the License);
  * you may not use this file except in compliance with the License.
@@ -35,40 +35,47 @@ static Ecore_Fd_Handler *__fd_handler;
 static loader_receiver_cb __receiver;
 
 static int __argc;
-static char** __argv;
+static char **__argv;
 
 static void __init_window(void)
 {
-	Evas_Object *win = elm_win_add(NULL, "package_name", ELM_WIN_BASIC);
-	if (win) {
-		elm_win_precreated_object_set(win);
+	Evas_Object *win;
+	Evas_Object *bg;
+	Evas_Object *conform;
 
-		Evas_Object *bg = elm_bg_add(win);
-		if (bg) {
-			evas_object_size_hint_weight_set(bg, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-			elm_win_resize_object_add(win, bg);
-			elm_bg_precreated_object_set(bg);
-		} else {
-			_E("[candidate] elm_bg_add() failed");
-		}
-
-		Evas_Object *conform = elm_conformant_add(win);
-		if (conform) {
-			evas_object_size_hint_weight_set(conform, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-			elm_win_resize_object_add(win, conform);
-			elm_conformant_precreated_object_set(conform);
-		} else {
-			_E("elm_conformant_add() failed");
-		}
-	} else {
+	win = elm_win_add(NULL, "package_name", ELM_WIN_BASIC);
+	if (win == NULL) {
 		_E("[candidate] elm_win_add() failed");
+		return;
+	}
+
+	elm_win_precreated_object_set(win);
+
+	bg = elm_bg_add(win);
+	if (bg) {
+		evas_object_size_hint_weight_set(bg, EVAS_HINT_EXPAND,
+				EVAS_HINT_EXPAND);
+		elm_win_resize_object_add(win, bg);
+		elm_bg_precreated_object_set(bg);
+	} else {
+		_E("[candidate] elm_bg_add() failed");
+	}
+
+	conform = elm_conformant_add(win);
+	if (conform) {
+		evas_object_size_hint_weight_set(conform, EVAS_HINT_EXPAND,
+				EVAS_HINT_EXPAND);
+		elm_win_resize_object_add(win, conform);
+		elm_conformant_precreated_object_set(conform);
+	} else {
+		_E("elm_conformant_add() failed");
 	}
 }
 
 static void __init_theme(void)
 {
 	char *theme = elm_theme_list_item_path_get(eina_list_data_get(
-			elm_theme_list_get(NULL)), NULL);
+				elm_theme_list_get(NULL)), NULL);
 	Eina_Bool is_exist = edje_file_group_exists(theme, "*");
 	if (!is_exist)
 		_D("theme path: %s", theme);
@@ -103,7 +110,8 @@ static void __loader_create_cb(bundle *extra, int type, void *user_data)
 }
 
 static int __loader_launch_cb(int argc, char **argv, const char *app_path,
-			const char *appid, const char *pkgid, const char *pkg_type, void *user_data)
+		const char *appid, const char *pkgid, const char *pkg_type,
+		void *user_data)
 {
 	return 0;
 }
@@ -139,8 +147,8 @@ static int __loader_terminate_cb(int argc, char **argv, void *user_data)
 do_dlopen:
 	handle = dlopen(argv[0], RTLD_LAZY | RTLD_GLOBAL);
 	if (handle == NULL) {
-		_E("dlopen failed(%s). Please complile with -fPIE and link with -pie flag",
-			dlerror());
+		_E("dlopen failed(%s). Please complile with -fPIE and "
+				"link with -pie flag", dlerror());
 		goto do_exec;
 	}
 
@@ -151,7 +159,8 @@ do_dlopen:
 
 	dl_main = dlsym(handle, "main");
 	if (dl_main == NULL) {
-		_E("dlsym not founded(%s). Please export 'main' function", dlerror());
+		_E("dlsym not founded(%s). Please export 'main' function",
+				dlerror());
 		dlclose(handle);
 		goto do_exec;
 	}
@@ -165,25 +174,28 @@ do_dlopen:
 do_exec:
 	if (access(argv[0], F_OK | R_OK)) {
 		SECURE_LOGE("access() failed for file: \"%s\", error: %d (%s)",
-			argv[0], errno, strerror_r(errno, err_str, sizeof(err_str)));
+				argv[0], errno,
+				strerror_r(errno, err_str, sizeof(err_str)));
 	} else {
 		SECURE_LOGD("[candidate] Exec application (%s)", __argv[0]);
 		if (libdir)
 			setenv("LD_LIBRARY_PATH", libdir, 1);
 		free(libdir);
-		if (execv(argv[0], argv) < 0)
-			SECURE_LOGE("execv() failed for file: \"%s\", error: %d (%s)",
-				argv[0], errno, strerror_r(errno, err_str, sizeof(err_str)));
+		if (execv(argv[0], argv) < 0) {
+			SECURE_LOGE("execv() failed for file: \"%s\", "
+				"error: %d (%s)", argv[0], errno,
+				strerror_r(errno, err_str, sizeof(err_str)));
+		}
 	}
 
 	return -1;
-
 }
 
-static Eina_Bool __process_fd_handler(void* data, Ecore_Fd_Handler *handler)
+static Eina_Bool __process_fd_handler(void *data, Ecore_Fd_Handler *handler)
 {
-	int fd = ecore_main_fd_handler_fd_get(handler);
+	int fd;
 
+	fd = ecore_main_fd_handler_fd_get(handler);
 	if (fd == -1) {
 		_D("[candidate] ECORE_FD_GET");
 		exit(-1);
@@ -215,8 +227,8 @@ static void __adapter_add_fd(void *user_data, int fd,
 		loader_receiver_cb receiver)
 {
 	__fd_handler = ecore_main_fd_handler_add(fd,
-			(Ecore_Fd_Handler_Flags)(ECORE_FD_READ | ECORE_FD_ERROR),
-			__process_fd_handler, NULL, NULL, NULL);
+			ECORE_FD_READ | ECORE_FD_ERROR, __process_fd_handler,
+			NULL, NULL, NULL);
 	if (__fd_handler == NULL) {
 		_D("fd_handler is NULL");
 		close(fd);
@@ -255,3 +267,4 @@ int main(int argc, char **argv)
 
 	return launchpad_loader_main(argc, argv, &callbacks, &adapter, NULL);
 }
+

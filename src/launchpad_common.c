@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Samsung Electronics Co., Ltd All Rights Reserved
+ * Copyright (c) 2015 - 2016 Samsung Electronics Co., Ltd All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the License);
  * you may not use this file except in compliance with the License.
@@ -49,6 +49,7 @@
 #define CONNECT_RETRY_TIME 100 * 1000
 #define CONNECT_RETRY_COUNT 3
 #define AUL_PKT_HEADER_SIZE (sizeof(int) + sizeof(int) + sizeof(int))
+#define CHAR_SIZE (sizeof(char))
 
 static int __read_proc(const char *path, char *buf, int size)
 {
@@ -201,7 +202,8 @@ int _create_server_sock(const char *name)
 
 	memset(&saddr, 0, sizeof(saddr));
 	saddr.sun_family = AF_UNIX;
-	snprintf(saddr.sun_path, sizeof(saddr.sun_path), "/run/user/%d/%s", getuid(), name);
+	snprintf(saddr.sun_path, sizeof(saddr.sun_path), "/run/user/%d/%s",
+			getuid(), name);
 	unlink(saddr.sun_path);
 
 	if (bind(fd, (struct sockaddr *)&saddr, sizeof(saddr)) < 0) {
@@ -335,6 +337,7 @@ char *_proc_get_cmdline_bypid(int pid)
 	char buf[MAX_CMD_BUFSZ];
 	int ret;
 	char *ptr;
+	int len;
 
 	snprintf(buf, sizeof(buf), "/proc/%d/cmdline", pid);
 	ret = __read_proc(buf, buf, sizeof(buf));
@@ -363,10 +366,14 @@ char *_proc_get_cmdline_bypid(int pid)
 
 		return strdup(ptr);
 	} else if (strncmp(buf, BASH_NAME, BASH_SIZE) == 0) {
-		if (strncmp(&buf[BASH_SIZE + 1], OPROFILE_NAME, OPROFILE_SIZE) == 0) {
-			if (strncmp(&buf[BASH_SIZE + OPROFILE_SIZE + 2], OPTION_VALGRIND_NAME,
-					OPTION_VALGRIND_SIZE) == 0) {
-				return strdup(&buf[BASH_SIZE + OPROFILE_SIZE + OPTION_VALGRIND_SIZE + 3]);
+		if (strncmp(&buf[BASH_SIZE + 1], OPROFILE_NAME,
+					OPROFILE_SIZE) == 0) {
+			if (strncmp(&buf[BASH_SIZE + OPROFILE_SIZE + 2],
+						OPTION_VALGRIND_NAME,
+						OPTION_VALGRIND_SIZE) == 0) {
+				len = BASH_SIZE + OPROFILE_SIZE +
+					OPTION_VALGRIND_SIZE + 3;
+				return strdup(&buf[len]);
 			}
 		}
 	}
@@ -374,7 +381,7 @@ char *_proc_get_cmdline_bypid(int pid)
 	return strdup(buf);
 }
 
-appinfo_t* _appinfo_create(bundle *kb)
+appinfo_t *_appinfo_create(bundle *kb)
 {
 	appinfo_t *menu_info;
 	const char *ptr = NULL;
@@ -446,7 +453,7 @@ char *_appinfo_get_app_path(appinfo_t *menu_info)
 		free(menu_info->app_path);
 		menu_info->app_path = NULL;
 	} else if (path_len > 0) {
-		tmp_app_path = malloc(sizeof(char) * (path_len + 1));
+		tmp_app_path = malloc(CHAR_SIZE * (path_len + 1));
 		if (tmp_app_path == NULL)
 			return NULL;
 		snprintf(tmp_app_path, path_len + 1, "%s", menu_info->app_path);
@@ -488,7 +495,7 @@ void _appinfo_free(appinfo_t *menu_info)
 	free(menu_info);
 }
 
-void _modify_bundle(bundle * kb, int caller_pid, appinfo_t *menu_info, int cmd)
+void _modify_bundle(bundle *kb, int caller_pid, appinfo_t *menu_info, int cmd)
 {
 	char *ptr;
 	char exe[MAX_PATH_LEN];
@@ -520,7 +527,8 @@ void _modify_bundle(bundle * kb, int caller_pid, appinfo_t *menu_info, int cmd)
 					break;
 				ptr += flag;
 
-				flag = __parse_app_path(ptr, value, sizeof(value));
+				flag = __parse_app_path(ptr, value,
+						sizeof(value));
 				if (flag < 0)
 					break;
 				ptr += flag;
@@ -553,8 +561,9 @@ int _connect_to_launchpad(int type, int id)
 
 	memset(&addr, 0x00, sizeof(struct sockaddr_un));
 	addr.sun_family = AF_UNIX;
-	snprintf(addr.sun_path, sizeof(addr.sun_path), "%s/%d/%s%d-%d", SOCKET_PATH, getuid(),
-		LAUNCHPAD_LOADER_SOCKET_NAME, type, id);
+	snprintf(addr.sun_path, sizeof(addr.sun_path), "%s/%d/%s%d-%d",
+			SOCKET_PATH, getuid(), LAUNCHPAD_LOADER_SOCKET_NAME,
+			type, id);
 
 	_D("connect to %s", addr.sun_path);
 	while (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
@@ -586,7 +595,7 @@ error:
 	return -1;
 }
 
-void _set_env(appinfo_t *menu_info, bundle * kb)
+void _set_env(appinfo_t *menu_info, bundle *kb)
 {
 	const char *str;
 
@@ -612,7 +621,7 @@ void _set_env(appinfo_t *menu_info, bundle * kb)
 		setenv("TIZEN_API_VERSION", str, 1);
 }
 
-char** _create_argc_argv(bundle * kb, int *margc)
+char **_create_argc_argv(bundle *kb, int *margc)
 {
 	char **argv;
 	int argc;
