@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Samsung Electronics Co., Ltd All Rights Reserved
+ * Copyright (c) 2015 - 2016 Samsung Electronics Co., Ltd All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the License);
  * you may not use this file except in compliance with the License.
@@ -22,21 +22,24 @@
 #include <string.h>
 #include <dlfcn.h>
 
-#define PROCESS_POOL_PRELOAD_FILE SHARE_PREFIX"/launchpad-process-pool-preload-list.txt"
+#define PROCESS_POOL_PRELOAD_FILE \
+	SHARE_PREFIX"/launchpad-process-pool-preload-list.txt"
 
 static int g_dlopen_size = 5;
 static int g_dlopen_count = 0;
-static void** g_dlopen_handle_list = NULL;
+static void **g_dlopen_handle_list = NULL;
 
 static inline int __preload_save_dlopen_handle(void *handle)
 {
+	void **tmp;
+
 	if (!handle)
 		return 1;
 
 	if (g_dlopen_count == g_dlopen_size || !g_dlopen_handle_list) {
-		void** tmp =
-			realloc(g_dlopen_handle_list, 2 * g_dlopen_size * sizeof(void *));
-		if (NULL == tmp) {
+		tmp = realloc(g_dlopen_handle_list,
+				2 * g_dlopen_size * sizeof(void *));
+		if (tmp == NULL) {
 			_E("out of memory\n");
 			dlclose(handle);
 			return 1;
@@ -51,11 +54,13 @@ static inline int __preload_save_dlopen_handle(void *handle)
 static inline void __preload_fini_for_process_pool(void)
 {
 	int i = 0;
+	void *handle;
+
 	if (!g_dlopen_handle_list)
 		return;
 
 	for (i = 0; i < g_dlopen_count; ++i) {
-		void *handle = g_dlopen_handle_list[i];
+		handle = g_dlopen_handle_list[i];
 		if (handle) {
 			if (0 != dlclose(handle))
 				_E("dlclose failed\n");
@@ -69,12 +74,15 @@ static inline void __preload_fini_for_process_pool(void)
 
 static inline void __preload_init_for_process_pool(void)
 {
-	if (atexit(__preload_fini_for_process_pool) != 0)
-		_E("Cannot register atexit callback. Libraries will not be unloaded");
-
 	void *handle = NULL;
 	char soname[MAX_LOCAL_BUFSZ] = { 0, };
 	FILE *preload_list = NULL;
+	size_t len;
+
+	if (atexit(__preload_fini_for_process_pool) != 0) {
+		_E("Cannot register atexit callback. "
+				"Libraries will not be unloaded");
+	}
 
 	preload_list = fopen(PROCESS_POOL_PRELOAD_FILE, "rt");
 	if (preload_list == NULL) {
@@ -83,7 +91,7 @@ static inline void __preload_init_for_process_pool(void)
 	}
 
 	while (fgets(soname, MAX_LOCAL_BUFSZ, preload_list) > 0) {
-		size_t len = strnlen(soname, MAX_LOCAL_BUFSZ);
+		len = strnlen(soname, MAX_LOCAL_BUFSZ);
 		if (len > 0)
 			soname[len - 1] = '\0';
 
@@ -103,4 +111,5 @@ static inline void __preload_init_for_process_pool(void)
 	fclose(preload_list);
 }
 
-#endif //__PROCESS_POOL_PRELOAD_H__
+#endif /* __PROCESS_POOL_PRELOAD_H__ */
+

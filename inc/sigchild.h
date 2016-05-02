@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Samsung Electronics Co., Ltd All Rights Reserved
+ * Copyright (c) 2015 - 2016 Samsung Electronics Co., Ltd All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the License);
  * you may not use this file except in compliance with the License.
@@ -62,7 +62,8 @@ static inline int __send_app_dead_signal_dbus(int dead_pid)
 	if (bus == NULL) {
 		bus = g_bus_get_sync(G_BUS_TYPE_SYSTEM, NULL, &err);
 		if (bus == NULL) {
-			_E("Failed to connect to the D-BUS daemon: %s", err->message);
+			_E("Failed to connect to the D-BUS daemon: %s",
+					err->message);
 			g_error_free(err);
 			return -1;
 		}
@@ -93,25 +94,29 @@ static inline int __send_app_dead_signal_dbus(int dead_pid)
 	return 0;
 }
 
-static inline int __send_app_launch_signal_dbus(int launch_pid, const char *app_id)
+static inline int __send_app_launch_signal_dbus(int launch_pid,
+		const char *app_id)
 {
 	GError *err = NULL;
+	GVariant *param;
 
 	if (bus == NULL) {
 		bus = g_bus_get_sync(G_BUS_TYPE_SYSTEM, NULL, &err);
 		if (bus == NULL) {
-			_E("Failed to connect to the D-BUS daemon: %s", err->message);
+			_E("Failed to connect to the D-BUS daemon: %s",
+					err->message);
 			g_error_free(err);
 			return -1;
 		}
 	}
 
+	param = g_variant_new("(us)", launch_pid, app_id);
 	if (g_dbus_connection_emit_signal(bus,
 					NULL,
 					AUL_DBUS_PATH,
 					AUL_DBUS_SIGNAL_INTERFACE,
 					AUL_DBUS_APPLAUNCH_SIGNAL,
-					g_variant_new("(us)", launch_pid, app_id),
+					param,
 					&err) == FALSE) {
 		_E("g_dbus_connection_emit_signal() is failed: %s",
 					err->message);

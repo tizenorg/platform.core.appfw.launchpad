@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Samsung Electronics Co., Ltd All Rights Reserved
+ * Copyright (c) 2015 - 2016 Samsung Electronics Co., Ltd All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the License);
  * you may not use this file except in compliance with the License.
@@ -25,13 +25,15 @@ extern "C" {
 
 typedef void (*loader_create_cb)(bundle *extra, int type, void *user_data);
 typedef int (*loader_launch_cb)(int argc, char **argv, const char *app_path,
-		const char *appid, const char *pkgid, const char *pkg_type, void *user_data);
+		const char *appid, const char *pkgid, const char *pkg_type,
+		void *user_data);
 typedef int (*loader_terminate_cb)(int argc, char **argv, void *user_data);
 
 typedef void (*loader_receiver_cb)(int fd);
 typedef void (*loader_loop_begin_cb)(void *user_data);
 typedef void (*loader_loop_quit_cb)(void *user_data);
-typedef void (*loader_add_fd_cb)(void *user_data, int fd, loader_receiver_cb receiver);
+typedef void (*loader_add_fd_cb)(void *user_data, int fd,
+		loader_receiver_cb receiver);
 typedef void (*loader_remove_fd_cb)(void *user_data, int fd);
 
 typedef struct {
@@ -58,7 +60,9 @@ enum LAUNCHPAD_TYPE {
 	LAUNCHPAD_TYPE_MAX
 };
 
-int launchpad_loader_main(int argc, char **argv, loader_lifecycle_callback_s *callbacks, loader_adapter_s *adapter, void *user_data);
+int launchpad_loader_main(int argc, char **argv,
+		loader_lifecycle_callback_s *callbacks,
+		loader_adapter_s *adapter, void *user_data);
 
 #ifdef __cplusplus
 }
