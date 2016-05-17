@@ -1,0 +1,28 @@
+[LOADER]
+NAME	wrt-loader
+EXE	/usr/bin/wrt-loader
+APP_TYPE	webapp
+
+# DETECTION_METHOD
+#   METHOD_TIMEOUT	1
+#   METHOD_VISIBILITY	2
+#   METHOD_DEMAND	4
+DETECTION_METHOD	5
+
+# ms
+TIMEOUT		5000
+
+[LOADER]
+NAME jsnative-loader
+EXE /usr/bin/jsnative-loader
+APP_TYPE jsapp
+
+# DETECTION_METHOD
+#   METHOD_TIMEOUT	1
+#   METHOD_VISIBILITY	2
+#   METHOD_DEMAND	4
+DETECTION_METHOD	3
+
+# ms
+TIMEOUT		5000
+

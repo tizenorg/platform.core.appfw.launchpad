@@ -28,7 +28,6 @@ Requires(postun): /usr/bin/systemctl
 Requires(preun): /usr/bin/systemctl
 
 %define appfw_feature_priority_change 0
-%define appfw_feature_lazy_loader 0
 
 %description
 Launchpad for launching applications
@@ -53,13 +52,9 @@ export FFLAGS="$FFLAGS -DTIZEN_DEBUG_ENABLE"
 %if 0%{?appfw_feature_priority_change}
 _APPFW_FEATURE_PRIORITY_CHANGE=ON
 %endif
-%if 0%{?appfw_feature_lazy_loader}
-_APPFW_FEATURE_LAZY_LOADER=ON
-%endif
 
 %cmake -DVERSION=%{version} \
 	-D_APPFW_FEATURE_PRIORITY_CHANGE:BOOL=${_APPFW_FEATURE_PRIORITY_CHANGE} \
-	-D_APPFW_FEATURE_LAZY_LOADER:BOOL=${_APPFW_FEATURE_LAZY_LOADER} \
 	.
 %__make %{?_smp_mflags}
 
@@ -84,6 +79,7 @@ cp %{_builddir}/%{name}-%{version}/LICENSE  %{buildroot}/usr/share/license/%{nam
 %{_prefix}/share/license/%{name}
 %{_prefix}/share/aul/preload_list.txt
 %{_prefix}/share/aul/launchpad-process-pool-preload-list.txt
+%{_prefix}/share/aul/default.loader
 %{_unitdir_user}/launchpad-process-pool.service
 %{_unitdir_user}/launchpad-process-pool.socket
 %{_unitdir_user}/sockets.target.wants/launchpad-process-pool.socket
