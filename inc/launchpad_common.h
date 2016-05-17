@@ -24,6 +24,7 @@
 #include <dlog.h>
 #include <bundle_internal.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 
 #ifdef LAUNCHPAD_LOG
 #undef LOG_TAG

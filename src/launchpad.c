@@ -39,6 +39,7 @@
 #include "sigchild.h"
 #include "key.h"
 #include "launchpad.h"
+#include "loader_info.h"
 
 #define AUL_PR_NAME         16
 #define EXEC_CANDIDATE_EXPIRED 5
@@ -47,12 +48,7 @@
 #define CANDIDATE_NONE 0
 #define PROCESS_POOL_LAUNCHPAD_SOCK ".launchpad-process-pool-sock"
 #define LOADER_PATH_DEFAULT "/usr/bin/launchpad-loader"
-#define LOADER_PATH_WRT		"/usr/bin/wrt-loader"
-#define LOADER_PATH_JS_NATIVE	"/usr/bin/jsnative-loader"
-
-#define METHOD_TIMEOUT		0x1
-#define METHOD_VISIBILITY	0x2
-#define METHOD_DEMAND		0x4
+#define LOADER_INFO_PATH	"/usr/share/aul/default.loader"
 
 typedef struct {
 	int type;
@@ -77,6 +73,8 @@ typedef struct {
 	int loader_id;
 } loader_context_t;
 
+static GList *loader_info_list;
+static int user_slot_offset;
 static GList *candidate_slot_list;
 static int sys_hwacc = -1;
 static candidate_process_context_t *__add_slot(int type, int loader_id,
@@ -297,13 +295,11 @@ static int __set_access(const char *appid)
 static int __get_launchpad_type(const char *internal_pool, const char *hwacc,
 		const char *app_type)
 {
-	if (app_type && strcmp(app_type, "webapp") == 0) {
-		_D("[launchpad] launchpad type: wrt");
-		return LAUNCHPAD_TYPE_WRT;
-	} else if (app_type && strcmp(app_type, "jsapp") == 0) {
-		_D("[launchpad] launchpad type: js_native");
-		return LAUNCHPAD_TYPE_JS_NATIVE;
-	}
+	int type;
+
+	type = _loader_info_find_type_by_app_type(loader_info_list,  app_type);
+	if (type >= LAUNCHPAD_TYPE_USER)
+		return type;
 
 	if (internal_pool && strcmp(internal_pool, "true") == 0 && hwacc) {
 		if (strcmp(hwacc, "NOT_USE") == 0) {
@@ -623,13 +619,6 @@ static int __launch_directly(const char *appid, const char *app_path, int clifd,
 		exit(-1);
 	}
 	SECURE_LOGD("==> real launch pid : %d %s\n", pid, app_path);
-
-#ifdef _APPFW_FEATURE_LAZY_LOADER
-	if (cpc && !cpc->enabled) {
-		cpc->enabled = true;
-		__set_timer(cpc);
-	}
-#endif
 
 	return pid;
 }
@@ -1253,6 +1242,41 @@ static int __init_sigchild_fd(void)
 	return 0;
 }
 
+static void __add_slot_from_info(gpointer data, gpointer user_data)
+{
+	loader_info_t *info = (loader_info_t *)data;
+	candidate_process_context_t *cpc;
+
+	if (access(info->exe, F_OK | X_OK) == 0) {
+		cpc = __add_slot(LAUNCHPAD_TYPE_USER + user_slot_offset, PAD_LOADER_ID_STATIC,
+				0, info->exe, NULL, true,
+				info->detection_method, info->timeout_val);
+		if (cpc == NULL)
+			return;
+
+		if (__prepare_candidate_process(LAUNCHPAD_TYPE_USER + user_slot_offset,
+				PAD_LOADER_ID_STATIC) != 0)
+			return;
+
+		info->type = LAUNCHPAD_TYPE_USER + user_slot_offset;
+		user_slot_offset++;
+	}
+}
+
+static void __add_default_slots_from_file(void)
+{
+	if (loader_info_list)
+		_loader_info_dispose(loader_info_list);
+
+	loader_info_list = _loader_info_load(LOADER_INFO_PATH);
+
+	if (loader_info_list == NULL)
+		return;
+
+	user_slot_offset = 0;
+	g_list_foreach(loader_info_list, __add_slot_from_info, NULL);
+}
+
 static int __add_default_slots(void)
 {
 	candidate_process_context_t *cpc;
@@ -1291,40 +1315,7 @@ static int __add_default_slots(void)
 	if (ret != 0)
 		return -1;
 
-	if (access(LOADER_PATH_WRT, F_OK | X_OK) == 0) {
-#ifdef _APPFW_FEATURE_LAZY_LOADER
-		cpc = __add_slot(LAUNCHPAD_TYPE_WRT, PAD_LOADER_ID_STATIC, 0,
-				LOADER_PATH_WRT, NULL, false,
-				METHOD_TIMEOUT | METHOD_DEMAND, 5000);
-		if (cpc == NULL)
-			return -1;
-#else
-		cpc = __add_slot(LAUNCHPAD_TYPE_WRT, PAD_LOADER_ID_STATIC, 0,
-				LOADER_PATH_WRT, NULL, true,
-				METHOD_TIMEOUT | METHOD_DEMAND, 5000);
-		if (cpc == NULL)
-			return -1;
-
-		ret = __prepare_candidate_process(LAUNCHPAD_TYPE_WRT,
-				PAD_LOADER_ID_STATIC);
-		if (ret != 0)
-			return -1;
-#endif
-	}
-
-	if (access(LOADER_PATH_JS_NATIVE, F_OK | X_OK) == 0) {
-		cpc = __add_slot(LAUNCHPAD_TYPE_JS_NATIVE, PAD_LOADER_ID_STATIC,
-				0, LOADER_PATH_JS_NATIVE, NULL, true,
-				METHOD_TIMEOUT | METHOD_VISIBILITY, 5000);
-		if (cpc == NULL)
-			return -1;
-
-		ret = __prepare_candidate_process(LAUNCHPAD_TYPE_JS_NATIVE,
-				PAD_LOADER_ID_STATIC);
-		if (ret != 0)
-			return -1;
-	}
-
+	__add_default_slots_from_file();
 	return 0;
 }
 
