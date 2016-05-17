@@ -33,6 +33,7 @@
 #include <glib.h>
 #include <linux/limits.h>
 #include <ttrace.h>
+#include <sched.h>
 
 #include "perf.h"
 #include "launchpad_common.h"
@@ -53,6 +54,8 @@
 #define METHOD_TIMEOUT		0x1
 #define METHOD_VISIBILITY	0x2
 #define METHOD_DEMAND		0x4
+
+#define CLONE_STACK_SIZE (1024 * 1024)
 
 typedef struct {
 	int type;
@@ -393,13 +396,32 @@ static void __send_result_to_caller(int clifd, int ret, const char *app_path)
 	return;
 }
 
+static int __exec_loader(void *arg)
+{
+	char **argv;
+
+	argv = (char **)arg;
+
+	__signal_unblock_sigchld();
+	__signal_fini();
+
+	if (execv(argv[0], argv) < 0)
+		_E("Failed to prepare candidate_process");
+	else
+		_D("Succeeded to prepare candidate_process");
+
+	free(arg);
+	return -1;
+}
+
 static int __prepare_candidate_process(int type, int loader_id)
 {
 	int pid;
 	char type_str[2] = {0, };
 	char loader_id_str[10] = {0, };
 	char argbuf[LOADER_ARG_LEN];
-	char *argv[] = {NULL, NULL, NULL, NULL, NULL, NULL};
+	char **argv;
+	char *clone_stack;
 	candidate_process_context_t *cpt = __find_slot(type, loader_id);
 
 	if (cpt == NULL)
@@ -408,31 +430,34 @@ static int __prepare_candidate_process(int type, int loader_id)
 	if (!cpt->enabled)
 		return -1;
 
+	argv = calloc(6, sizeof(char *));
+
 	memset(argbuf, ' ', LOADER_ARG_LEN);
 	argbuf[LOADER_ARG_LEN-1] = '\0';
 	argv[4] = argbuf;
 
 	cpt->last_exec_time = time(NULL);
-	pid = fork();
-	if (pid == 0) { /* child */
-		__signal_unblock_sigchld();
-		__signal_fini();
 
-		type_str[0] = '0' + type;
-		snprintf(loader_id_str, sizeof(loader_id_str), "%d", loader_id);
-		argv[0] = cpt->loader_path;
-		argv[1] = type_str;
-		argv[2] = loader_id_str;
-		argv[3] = cpt->loader_extra;
-		if (execv(argv[0], argv) < 0)
-			_E("Failed to prepare candidate_process");
-		else
-			_D("Succeeded to prepare candidate_process");
+	type_str[0] = '0' + type;
+	snprintf(loader_id_str, sizeof(loader_id_str), "%d", loader_id);
+	argv[0] = cpt->loader_path;
+	argv[1] = type_str;
+	argv[2] = loader_id_str;
+	argv[3] = cpt->loader_extra;
 
-		exit(-1);
+	clone_stack = malloc(CLONE_STACK_SIZE);
+	pid = clone(__exec_loader, clone_stack + CLONE_STACK_SIZE,
+		CLONE_NEWPID |
+		CLONE_CHILD_SETTID | CLONE_CHILD_CLEARTID | SIGCHLD,
+		(void *)argv);
+	if (pid == -1) {
+		_E("Failed to clone launchpad-loader");
+		free(argv);
+		return -1;
 	} else {
 		cpt->pid = pid;
 	}
+	free(argv);
 
 	return 0;
 }
@@ -538,7 +563,7 @@ static void __real_launch(const char *app_path, bundle * kb)
 }
 
 static int __prepare_exec(const char *appid, const char *app_path,
-			appinfo_t *menu_info, bundle * kb)
+			appinfo_t *menu_info, bundle *kb)
 {
 	char *file_name;
 	char process_name[AUL_PR_NAME];
@@ -583,45 +608,98 @@ static int __prepare_exec(const char *appid, const char *app_path,
 	return 0;
 }
 
+static int __get_real_pid()
+{
+	int result = -1;
+	char buffer[96];
+	const char *path = "/proc/self/status";
+
+	FILE *status = fopen(path, "r");
+	while(EOF != fscanf(status, "%95s", buffer)) {
+		if (!strncmp(buffer, "Pid:", 5)) {
+			(void)(fscanf(status, "%d", &result)+1);
+			break;
+		}
+	}
+	fclose(status);
+
+	return result;
+}
+
+struct launch_app_args {
+	const char *appid;
+	const char *app_path;
+	appinfo_t *menu_info;
+	bundle *kb;
+};
+
+static int __launch_app(void *arg)
+{
+	int max_fd;
+	int iter_fd;
+	char sock_path[PATH_MAX];
+	struct launch_app_args *args;
+	args = (struct launch_app_args *)arg;
+
+	PERF("fork done");
+	_D("lock up test log(no error) : fork done");
+
+	__signal_unblock_sigchld();
+	__signal_fini();
+
+	max_fd = sysconf(_SC_OPEN_MAX);
+	for (iter_fd = 3; iter_fd <= max_fd; iter_fd++)
+		close(iter_fd);
+
+	snprintf(sock_path, sizeof(sock_path), "/run/user/%d/%d",
+			getuid(), __get_real_pid());
+	unlink(sock_path);
+
+	PERF("prepare exec - first done");
+	_D("lock up test log(no error) : prepare exec - first done");
+
+	if (__prepare_exec(args->appid, args->app_path,
+			args->menu_info, args->kb) < 0) {
+		SECURE_LOGE("preparing work fail to launch - "
+			"can not launch %s\n", args->appid);
+		free(arg);
+		return -1;
+	}
+
+	PERF("prepare exec - second done");
+	_D("lock up test log(no error) : prepare exec - second done");
+	__real_launch(args->app_path, args->kb);
+	free(arg);
+
+	return -1;
+}
+
 static int __launch_directly(const char *appid, const char *app_path, int clifd,
 		bundle *kb, appinfo_t *menu_info,
 		candidate_process_context_t *cpc)
 {
-	char sock_path[PATH_MAX];
-	int pid = fork();
-	int max_fd;
-	int iter_fd;
+	int pid;
+	char *clone_stack;
+	struct launch_app_args *args;
 
-	if (pid == 0) {
-		PERF("fork done");
-		_D("lock up test log(no error) : fork done");
+	args = malloc(sizeof(struct launch_app_args));
+	args->appid = appid;
+	args->app_path = app_path;
+	args->menu_info = menu_info;
+	args->kb = kb;
 
-		__signal_unblock_sigchld();
-		__signal_fini();
-
-		max_fd = sysconf(_SC_OPEN_MAX);
-		for (iter_fd = 3; iter_fd <= max_fd; iter_fd++)
-			close(iter_fd);
-
-		snprintf(sock_path, sizeof(sock_path), "/run/user/%d/%d",
-				getuid(), getpid());
-		unlink(sock_path);
-
-		PERF("prepare exec - first done");
-		_D("lock up test log(no error) : prepare exec - first done");
-
-		if (__prepare_exec(appid, app_path, menu_info, kb) < 0) {
-			SECURE_LOGE("preparing work fail to launch - "
-				"can not launch %s\n", appid);
-			exit(-1);
-		}
-
-		PERF("prepare exec - second done");
-		_D("lock up test log(no error) : prepare exec - second done");
-		__real_launch(app_path, kb);
-
-		exit(-1);
+	clone_stack = malloc(CLONE_STACK_SIZE);
+	pid = clone(__launch_app, clone_stack + CLONE_STACK_SIZE,
+		CLONE_NEWPID |
+		CLONE_CHILD_SETTID | CLONE_CHILD_CLEARTID | SIGCHLD,
+		(void *)args);
+	if (pid == -1) {
+		_E("Failed to clone an app process");
+		free(args);
+		return -1;
 	}
+	free(args);
+
 	SECURE_LOGD("==> real launch pid : %d %s\n", pid, app_path);
 
 #ifdef _APPFW_FEATURE_LAZY_LOADER
