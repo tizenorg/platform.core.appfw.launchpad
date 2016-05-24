@@ -1242,6 +1242,17 @@ static void __add_slot_from_info(gpointer data, gpointer user_data)
 	loader_info_t *info = (loader_info_t *)data;
 	candidate_process_context_t *cpc;
 
+	if (!strcmp(info->exe, "null")) {
+		cpc = __add_slot(LAUNCHPAD_TYPE_USER + user_slot_offset, PAD_LOADER_ID_DIRECT,
+				0, info->exe, NULL, 0, 0);
+		if (cpc == NULL)
+			return;
+
+		info->type = LAUNCHPAD_TYPE_USER + user_slot_offset;
+		user_slot_offset++;
+		return;
+	}
+
 	if (access(info->exe, F_OK | X_OK) == 0) {
 		cpc = __add_slot(LAUNCHPAD_TYPE_USER + user_slot_offset, PAD_LOADER_ID_STATIC,
 				0, info->exe, NULL, info->detection_method, info->timeout_val);
