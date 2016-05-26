@@ -21,6 +21,7 @@
 #include <sys/prctl.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <malloc.h>
 #include <linux/limits.h>
 #include <Elementary.h>
 #include <bundle_internal.h>
@@ -107,6 +108,7 @@ static void __loader_create_cb(bundle *extra, int type, void *user_data)
 		__init_theme();
 		break;
 	}
+	malloc_trim(0);
 }
 
 static int __loader_launch_cb(int argc, char **argv, const char *app_path,
