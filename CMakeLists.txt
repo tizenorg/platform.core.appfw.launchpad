@@ -8,7 +8,6 @@ INCLUDE(FindPkgConfig)
 PKG_CHECK_MODULES(${this_target_pool} REQUIRED
 	dlog
 	libsystemd-daemon
-	vconf
 	security-manager
 	bundle
 	gio-2.0
@@ -26,6 +25,7 @@ PKG_CHECK_MODULES(${this_target_loader} REQUIRED
 	security-manager
 	bundle
 	aul
+	vconf
 	)
 
 FOREACH(flag ${${this_target_loader}_CFLAGS})
