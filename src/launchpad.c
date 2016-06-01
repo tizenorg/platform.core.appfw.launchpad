@@ -1138,7 +1138,7 @@ static candidate_process_context_t *__add_slot(int type, int loader_id,
 	cpc->source = 0;
 	cpc->timer = 0;
 	cpc->loader_path = strdup(loader_path);
-	cpc->loader_extra = loader_extra ? strdup(loader_extra) : NULL;
+	cpc->loader_extra = loader_extra ? strdup(loader_extra) : strdup("");
 	cpc->detection_method = detection_method;
 	cpc->timeout_val = timeout_val;
 
