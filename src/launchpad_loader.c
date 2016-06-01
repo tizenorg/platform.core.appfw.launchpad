@@ -137,12 +137,13 @@ static int __loader_terminate_cb(int argc, char **argv, void *user_data)
 	bool restore = false;
 	char *libdir = NULL;
 
-	SECURE_LOGD("[candidate] Launch real application (%s)", argv[0]);
+	SECURE_LOGD("[candidate] Launch real application (%s)",
+			argv[LOADER_ARG_PATH]);
 
 	if (getcwd(old_cwd, sizeof(old_cwd)) == NULL)
 		goto do_dlopen;
 
-	libdir = _get_libdir(argv[0]);
+	libdir = _get_libdir(argv[LOADER_ARG_PATH]);
 	if (libdir == NULL)
 		goto do_dlopen;
 
@@ -156,7 +157,7 @@ static int __loader_terminate_cb(int argc, char **argv, void *user_data)
 		restore = true;
 
 do_dlopen:
-	handle = dlopen(argv[0], RTLD_LAZY | RTLD_GLOBAL);
+	handle = dlopen(argv[LOADER_ARG_PATH], RTLD_LAZY | RTLD_GLOBAL);
 	if (handle == NULL) {
 		_E("dlopen failed(%s). Please complile with -fPIE and "
 				"link with -pie flag", dlerror());
@@ -183,19 +184,20 @@ do_dlopen:
 	return res;
 
 do_exec:
-	if (access(argv[0], F_OK | R_OK)) {
+	if (access(argv[LOADER_ARG_PATH], F_OK | R_OK)) {
 		SECURE_LOGE("access() failed for file: \"%s\", error: %d (%s)",
-				argv[0], errno,
+				argv[LOADER_ARG_PATH], errno,
 				strerror_r(errno, err_str, sizeof(err_str)));
 	} else {
-		SECURE_LOGD("[candidate] Exec application (%s)", __argv[0]);
+		SECURE_LOGD("[candidate] Exec application (%s)",
+				__argv[LOADER_ARG_PATH]);
 		__close_fds();
 		if (libdir)
 			setenv("LD_LIBRARY_PATH", libdir, 1);
 		free(libdir);
-		if (execv(argv[0], argv) < 0) {
+		if (execv(argv[LOADER_ARG_PATH], argv) < 0) {
 			SECURE_LOGE("execv() failed for file: \"%s\", "
-				"error: %d (%s)", argv[0], errno,
+				"error: %d (%s)", argv[LOADER_ARG_PATH], errno,
 				strerror_r(errno, err_str, sizeof(err_str)));
 		}
 	}

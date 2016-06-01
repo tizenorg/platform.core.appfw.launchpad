@@ -68,6 +68,14 @@
 	} \
 } while (0)
 
+enum loader_arg {
+	LOADER_ARG_PATH,
+	LOADER_ARG_TYPE,
+	LOADER_ARG_ID,
+	LOADER_ARG_EXTRA,
+	LOADER_ARG_MAX,
+};
+
 typedef struct _app_pkt_t {
 	int cmd;
 	int len;
