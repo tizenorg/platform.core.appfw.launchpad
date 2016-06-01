@@ -380,6 +380,11 @@ static int __after_loop(void)
 	return -1;
 }
 
+bundle *launchpad_loader_get_bundle()
+{
+	return __bundle;
+}
+
 API int launchpad_loader_main(int argc, char **argv,
 		loader_lifecycle_callback_s *callbacks,
 		loader_adapter_s *adapter, void *user_data)

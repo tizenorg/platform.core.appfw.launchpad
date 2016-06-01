@@ -26,68 +26,92 @@
 #include <Elementary.h>
 #include <bundle_internal.h>
 #include <aul.h>
+#include <vconf.h>
 
 #include "launchpad_common.h"
 #include "preload.h"
 #include "process_pool_preload.h"
 #include "launchpad.h"
 
+extern bundle *launchpad_loader_get_bundle();
+
 static Ecore_Fd_Handler *__fd_handler;
 static loader_receiver_cb __receiver;
 
 static int __argc;
 static char **__argv;
+static int __sys_hwacc;
+static Evas_Object *__win;
+static Evas_Object *__bg;
+static Evas_Object *__conform;
+
+static void __vconf_cb(keynode_t *key, void *data)
+{
+	const char *name;
+
+	name = vconf_keynode_get_name(key);
+	if (name && strcmp(name, VCONFKEY_SETAPPL_APP_HW_ACCELERATION) == 0) {
+		__sys_hwacc = vconf_keynode_get_int(key);
+		_D("sys hwacc: %d", __sys_hwacc);
+	}
+}
 
 static void __init_window(void)
 {
-	Evas_Object *win;
-	Evas_Object *bg;
-	Evas_Object *conform;
-
-	win = elm_win_add(NULL, "package_name", ELM_WIN_BASIC);
-	if (win == NULL) {
+	__win = elm_win_add(NULL, "package_name", ELM_WIN_BASIC);
+	if (__win == NULL) {
 		_E("[candidate] elm_win_add() failed");
 		return;
 	}
 
-	elm_win_precreated_object_set(win);
+	elm_win_precreated_object_set(__win);
 
-	bg = elm_bg_add(win);
-	if (bg) {
-		evas_object_size_hint_weight_set(bg, EVAS_HINT_EXPAND,
+	__bg = elm_bg_add(__win);
+	if (__bg) {
+		evas_object_size_hint_weight_set(__bg, EVAS_HINT_EXPAND,
 				EVAS_HINT_EXPAND);
-		elm_win_resize_object_add(win, bg);
-		elm_bg_precreated_object_set(bg);
+		elm_win_resize_object_add(__win, __bg);
+		elm_bg_precreated_object_set(__bg);
 	} else {
 		_E("[candidate] elm_bg_add() failed");
 	}
 
-	conform = elm_conformant_add(win);
-	if (conform) {
-		evas_object_size_hint_weight_set(conform, EVAS_HINT_EXPAND,
+	__conform = elm_conformant_add(__win);
+	if (__conform) {
+		evas_object_size_hint_weight_set(__conform, EVAS_HINT_EXPAND,
 				EVAS_HINT_EXPAND);
-		elm_win_resize_object_add(win, conform);
-		elm_conformant_precreated_object_set(conform);
+		elm_win_resize_object_add(__win, __conform);
+		elm_conformant_precreated_object_set(__conform);
 	} else {
 		_E("elm_conformant_add() failed");
 	}
 }
 
-static void __init_theme(void)
+static void __fini_window(void)
 {
-	char *theme = elm_theme_list_item_path_get(eina_list_data_get(
-				elm_theme_list_get(NULL)), NULL);
-	Eina_Bool is_exist = edje_file_group_exists(theme, "*");
-	if (!is_exist)
-		_D("theme path: %s", theme);
+	if (__conform) {
+		evas_object_del(__conform);
+		elm_conformant_precreated_object_set(NULL);
+		__conform = NULL;
+	}
 
-	if (theme)
-		free(theme);
+	if (__bg) {
+		evas_object_del(__bg);
+		elm_bg_precreated_object_set(NULL);
+		__bg = NULL;
+	}
+
+	if (__win) {
+		evas_object_del(__win);
+		elm_win_precreated_object_set(NULL);
+		__win = NULL;
+	}
 }
 
 static void __loader_create_cb(bundle *extra, int type, void *user_data)
 {
 	int elm_init_cnt = 0;
+	int ret;
 
 	__preload_init(__argc, __argv);
 	__preload_init_for_process_pool();
@@ -95,18 +119,20 @@ static void __loader_create_cb(bundle *extra, int type, void *user_data)
 	elm_init_cnt = elm_init(__argc, __argv);
 	_D("[candidate] elm init, returned: %d", elm_init_cnt);
 
-	switch (type) {
-	case LAUNCHPAD_TYPE_SW:
-		elm_config_accel_preference_set("none");
-		__init_window();
-		break;
-	case LAUNCHPAD_TYPE_HW:
-		elm_config_accel_preference_set("hw");
-		__init_window();
-		break;
-	case LAUNCHPAD_TYPE_COMMON:
-		__init_theme();
-		break;
+	elm_config_accel_preference_set("hw");
+	__init_window();
+
+	ret = vconf_get_int(VCONFKEY_SETAPPL_APP_HW_ACCELERATION, &__sys_hwacc);
+	if (ret != VCONF_OK) {
+		_E("Failed to get vconf int: %s",
+				VCONFKEY_SETAPPL_APP_HW_ACCELERATION);
+	}
+
+	ret = vconf_notify_key_changed(VCONFKEY_SETAPPL_APP_HW_ACCELERATION,
+			__vconf_cb, NULL);
+	if (ret != 0) {
+		_E("Failed to register callback for %s",
+				VCONFKEY_SETAPPL_APP_HW_ACCELERATION);
 	}
 	malloc_trim(0);
 }
@@ -115,6 +141,31 @@ static int __loader_launch_cb(int argc, char **argv, const char *app_path,
 		const char *appid, const char *pkgid, const char *pkg_type,
 		void *user_data)
 {
+	const char *hwacc;
+	bundle *kb = launchpad_loader_get_bundle();
+
+	vconf_ignore_key_changed(VCONFKEY_SETAPPL_APP_HW_ACCELERATION, __vconf_cb);
+	if (kb == NULL)
+		return 0;
+
+	hwacc = bundle_get_val(kb, AUL_K_HWACC);
+
+	if (!hwacc)
+		return 0;
+
+	if (strcmp(hwacc, "USE") == 0) {
+		_D("Use preinitialized window");
+		return 0;
+	} else if (strcmp(hwacc, "SYS") == 0 &&
+			__sys_hwacc == SETTING_HW_ACCELERATION_ON) {
+		_D("Use preinitialized window");
+		return 0;
+	}
+
+	_D("Dispose window");
+	__fini_window();
+	elm_config_accel_preference_set("none");
+
 	return 0;
 }
 

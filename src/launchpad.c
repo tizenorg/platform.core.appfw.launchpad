@@ -28,7 +28,6 @@
 #include <bundle_internal.h>
 #include <security-manager.h>
 #include <time.h>
-#include <vconf.h>
 #include <systemd/sd-daemon.h>
 #include <glib.h>
 #include <linux/limits.h>
@@ -75,7 +74,6 @@ typedef struct {
 static GList *loader_info_list;
 static int user_slot_offset;
 static GList *candidate_slot_list;
-static int sys_hwacc = -1;
 static candidate_process_context_t *__add_slot(int type, int loader_id,
 		int caller_pid, const char *loader_path, const char *extra,
 		int detection_method, int timeout_val);
@@ -300,30 +298,7 @@ static int __get_launchpad_type(const char *internal_pool, const char *hwacc,
 	if (type >= LAUNCHPAD_TYPE_USER)
 		return type;
 
-	if (internal_pool && strcmp(internal_pool, "true") == 0 && hwacc) {
-		if (strcmp(hwacc, "NOT_USE") == 0) {
-			_D("[launchpad] launchpad type: S/W(%d)",
-					LAUNCHPAD_TYPE_SW);
-			return LAUNCHPAD_TYPE_SW;
-		} else if (strcmp(hwacc, "USE") == 0) {
-			_D("[launchpad] launchpad type: H/W(%d)",
-					LAUNCHPAD_TYPE_HW);
-			return LAUNCHPAD_TYPE_HW;
-		} else if (strcmp(hwacc, "SYS") == 0) {
-			if (sys_hwacc == SETTING_HW_ACCELERATION_ON) {
-				_D("[launchpad] launchpad type: H/W(%d)",
-						LAUNCHPAD_TYPE_HW);
-				return LAUNCHPAD_TYPE_HW;
-			} else if (sys_hwacc == SETTING_HW_ACCELERATION_OFF) {
-				_D("[launchpad] launchpad type: S/W(%d)",
-						LAUNCHPAD_TYPE_SW);
-				return LAUNCHPAD_TYPE_SW;
-			}
-		}
-	}
-
-	_D("[launchpad] launchpad type: COMMON(%d)", LAUNCHPAD_TYPE_COMMON);
-	return LAUNCHPAD_TYPE_COMMON;
+	return LAUNCHPAD_TYPE_HW;
 }
 
 static int __get_loader_id(bundle *kb)
@@ -1072,19 +1047,6 @@ static gboolean __handle_launch_event(gpointer data)
 			_W("Launch %d type process", type);
 			pid = __send_launchpad_loader(cpc, pkt, app_path,
 					clifd);
-		} else if (cpc->type == LAUNCHPAD_TYPE_SW ||
-				cpc->type == LAUNCHPAD_TYPE_HW) {
-			cpc = __find_slot(LAUNCHPAD_TYPE_COMMON, loader_id);
-			if (cpc != NULL && cpc->prepared) {
-				_W("Launch common type process");
-				pid = __send_launchpad_loader(cpc, pkt,
-						app_path, clifd);
-			} else {
-				_W("Launch directly");
-				pid = __launch_directly(menu_info->appid,
-						app_path, clifd, kb, menu_info,
-						NULL);
-			}
 		} else {
 			_W("Launch directly");
 			pid = __launch_directly(menu_info->appid, app_path,
@@ -1290,28 +1252,6 @@ static int __add_default_slots(void)
 	candidate_process_context_t *cpc;
 	int ret;
 
-	cpc = __add_slot(LAUNCHPAD_TYPE_COMMON, PAD_LOADER_ID_STATIC, 0,
-			LOADER_PATH_DEFAULT, NULL,
-			METHOD_TIMEOUT | METHOD_VISIBILITY, 5000);
-	if (cpc == NULL)
-		return -1;
-
-	ret = __prepare_candidate_process(LAUNCHPAD_TYPE_COMMON,
-			PAD_LOADER_ID_STATIC);
-	if (ret != 0)
-		return -1;
-
-	cpc = __add_slot(LAUNCHPAD_TYPE_SW, PAD_LOADER_ID_STATIC, 0,
-			LOADER_PATH_DEFAULT, NULL,
-			METHOD_TIMEOUT | METHOD_VISIBILITY, 5000);
-	if (cpc == NULL)
-		return -1;
-
-	ret = __prepare_candidate_process(LAUNCHPAD_TYPE_SW,
-			PAD_LOADER_ID_STATIC);
-	if (ret != 0)
-		return -1;
-
 	cpc = __add_slot(LAUNCHPAD_TYPE_HW, PAD_LOADER_ID_STATIC, 0,
 			LOADER_PATH_DEFAULT, NULL,
 			METHOD_TIMEOUT | METHOD_VISIBILITY, 5000);
@@ -1325,17 +1265,6 @@ static int __add_default_slots(void)
 
 	__add_default_slots_from_file();
 	return 0;
-}
-
-static void __vconf_cb(keynode_t *key, void *data)
-{
-	const char *name;
-
-	name = vconf_keynode_get_name(key);
-	if (name && strcmp(name, VCONFKEY_SETAPPL_APP_HW_ACCELERATION) == 0) {
-		sys_hwacc = vconf_keynode_get_int(key);
-		SECURE_LOGD("sys hwacc: %d", sys_hwacc);
-	}
 }
 
 static int __before_loop(int argc, char **argv)
@@ -1352,21 +1281,6 @@ static int __before_loop(int argc, char **argv)
 	if (ret != 0) {
 		_E("__init_launchpad_fd() failed");
 		return -1;
-	}
-
-	ret = vconf_get_int(VCONFKEY_SETAPPL_APP_HW_ACCELERATION, &sys_hwacc);
-	if (ret != VCONF_OK) {
-		_E("Failed to get vconf int: %s",
-				VCONFKEY_SETAPPL_APP_HW_ACCELERATION);
-	}
-
-	SECURE_LOGD("sys hwacc: %d", sys_hwacc);
-
-	ret = vconf_notify_key_changed(VCONFKEY_SETAPPL_APP_HW_ACCELERATION,
-			__vconf_cb, NULL);
-	if (ret != 0) {
-		_E("Failed to register callback for %s",
-				VCONFKEY_SETAPPL_APP_HW_ACCELERATION);
 	}
 
 	return 0;
