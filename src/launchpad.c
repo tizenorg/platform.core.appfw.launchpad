@@ -401,8 +401,8 @@ static int __prepare_candidate_process(int type, int loader_id)
 		return -1;
 
 	memset(argbuf, ' ', LOADER_ARG_LEN);
-	argbuf[LOADER_ARG_LEN-1] = '\0';
-	argv[4] = argbuf;
+	argbuf[LOADER_ARG_LEN - 1] = '\0';
+	argv[LOADER_ARG_MAX] = argbuf;
 
 	cpt->last_exec_time = time(NULL);
 	pid = fork();
@@ -412,11 +412,11 @@ static int __prepare_candidate_process(int type, int loader_id)
 
 		type_str[0] = '0' + type;
 		snprintf(loader_id_str, sizeof(loader_id_str), "%d", loader_id);
-		argv[0] = cpt->loader_path;
-		argv[1] = type_str;
-		argv[2] = loader_id_str;
-		argv[3] = cpt->loader_extra;
-		if (execv(argv[0], argv) < 0)
+		argv[LOADER_ARG_PATH] = cpt->loader_path;
+		argv[LOADER_ARG_TYPE] = type_str;
+		argv[LOADER_ARG_ID] = loader_id_str;
+		argv[LOADER_ARG_EXTRA] = cpt->loader_extra;
+		if (execv(argv[LOADER_ARG_PATH], argv) < 0)
 			_E("Failed to prepare candidate_process");
 		else
 			_D("Succeeded to prepare candidate_process");
@@ -491,16 +491,19 @@ static int __normal_fork_exec(int argc, char **argv)
 
 	_D("start real fork and exec");
 
-	libdir = _get_libdir(argv[0]);
+	libdir = _get_libdir(argv[LOADER_ARG_PATH]);
 	if (libdir)
 		setenv("LD_LIBRARY_PATH", libdir, 1);
 	free(libdir);
 
-	if (execv(argv[0], argv) < 0) { /* Flawfinder: ignore */
-		if (errno == EACCES)
-			_E("such a file is no executable - %s", argv[0]);
-		else
-			_E("unknown executable error - %s", argv[0]);
+	if (execv(argv[LOADER_ARG_PATH], argv) < 0) { /* Flawfinder: ignore */
+		if (errno == EACCES) {
+			_E("such a file is no executable - %s",
+					argv[LOADER_ARG_PATH]);
+		} else {
+			_E("unknown executable error - %s",
+					argv[LOADER_ARG_PATH]);
+		}
 		return -1;
 	}
 	/* never reach*/
@@ -517,7 +520,7 @@ static void __real_launch(const char *app_path, bundle * kb)
 		putenv("TIZEN_DEBUGGING_PORT=1");
 
 	app_argv = _create_argc_argv(kb, &app_argc);
-	app_argv[0] = strdup(app_path);
+	app_argv[LOADER_ARG_PATH] = strdup(app_path);
 
 	for (i = 0; i < app_argc; i++) {
 		if ((i % 2) == 1)

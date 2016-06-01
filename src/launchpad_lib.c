@@ -256,7 +256,7 @@ static int __candidate_process_launchpad_main_loop(app_pkt_t *pkt,
 
 		*out_argv = tmp_argv;
 		*out_argc = tmp_argc;
-		(*out_argv)[0] = out_app_path;
+		(*out_argv)[LOADER_ARG_PATH] = out_app_path;
 
 		for (i = 0; i < *out_argc; i++) {
 			SECURE_LOGD("input argument %d : %s##", i,
@@ -302,10 +302,11 @@ static void __receiver_cb(int fd)
 
 	__loader_adapter->remove_fd(__loader_user_data, fd);
 	close(fd);
-	ret = __candidate_process_launchpad_main_loop(pkt, __argv[0],
-			&__argc, &__argv, __loader_type);
+	ret = __candidate_process_launchpad_main_loop(pkt,
+			__argv[LOADER_ARG_PATH], &__argc, &__argv,
+			__loader_type);
 	SECURE_LOGD("[candidate] real app argv[0]: %s, real app argc: %d",
-			__argv[0], __argc);
+			__argv[LOADER_ARG_PATH], __argc);
 	free(pkt);
 
 	if (ret >= 0) {
@@ -337,8 +338,8 @@ static int __before_loop(int argc, char **argv)
 	setsid();
 
 	if (argc > 3) {
-		extra = bundle_decode((bundle_raw *)argv[3],
-				strlen(argv[3]));
+		extra = bundle_decode((bundle_raw *)argv[LOADER_ARG_EXTRA],
+				strlen(argv[LOADER_ARG_EXTRA]));
 	}
 
 	if (__loader_callbacks->create) {
@@ -388,13 +389,13 @@ API int launchpad_loader_main(int argc, char **argv,
 		return -1;
 	}
 
-	__loader_type = argv[1][0] - '0';
+	__loader_type = argv[LOADER_ARG_TYPE][0] - '0';
 	if (__loader_type < 0 || __loader_type >= LAUNCHPAD_TYPE_MAX) {
 		_E("invalid argument. (type: %d)", __loader_type);
 		return -1;
 	}
 
-	__loader_id = atoi(argv[2]);
+	__loader_id = atoi(argv[LOADER_ARG_ID]);
 
 	if (callbacks == NULL) {
 		_E("invalid argument. callback is null");
