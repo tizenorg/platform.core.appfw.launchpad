@@ -506,11 +506,9 @@ void _modify_bundle(bundle *kb, int caller_pid, appinfo_t *menu_info, int cmd)
 	bundle_del(kb, AUL_K_EXEC);
 	bundle_del(kb, AUL_K_APP_TYPE);
 	bundle_del(kb, AUL_K_PACKAGETYPE);
-	bundle_del(kb, AUL_K_HWACC);
 	bundle_del(kb, AUL_K_TASKMANAGE);
 	bundle_del(kb, AUL_K_PKGID);
 	bundle_del(kb, AUL_K_COMP_TYPE);
-	bundle_del(kb, AUL_K_INTERNAL_POOL);
 
 	/* Parse app_path to retrieve default bundle*/
 	if (cmd == PAD_CMD_LAUNCH) {
