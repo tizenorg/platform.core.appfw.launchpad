@@ -208,7 +208,8 @@ static int __loader_terminate_cb(int argc, char **argv, void *user_data)
 		restore = true;
 
 do_dlopen:
-	handle = dlopen(argv[LOADER_ARG_PATH], RTLD_LAZY | RTLD_GLOBAL);
+	handle = dlopen(argv[LOADER_ARG_PATH],
+			RTLD_LAZY | RTLD_GLOBAL | RTLD_DEEPBIND);
 	if (handle == NULL) {
 		_E("dlopen failed(%s). Please complile with -fPIE and "
 				"link with -pie flag", dlerror());
