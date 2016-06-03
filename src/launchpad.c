@@ -262,12 +262,6 @@ static int __listen_candidate_process(int type, int loader_id)
 		goto error;
 	}
 
-	_D("chmod %s", addr.sun_path);
-	if (chmod(addr.sun_path, (S_IRWXU | S_IRWXG | S_IRWXO)) < 0) {
-		_E("chmod error");
-		goto error;
-	}
-
 	_D("listen to %s", addr.sun_path);
 	if (listen(fd, MAX_PENDING_CONNECTIONS) == -1) {
 		_E("listen error");
