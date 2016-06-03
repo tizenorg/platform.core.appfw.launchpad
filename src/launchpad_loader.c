@@ -33,6 +33,12 @@
 #include "process_pool_preload.h"
 #include "launchpad.h"
 
+#define KEY_LOADER_TYPE		"loader_type"
+#define LOADER_TYPE_COMMON	"common-loader"
+#define LOADER_TYPE_HW		"hw-loader"
+#define LOADER_TYPE_SW		"sw-loader"
+
+
 extern bundle *launchpad_loader_get_bundle();
 
 static Ecore_Fd_Handler *__fd_handler;
@@ -44,6 +50,22 @@ static int __sys_hwacc;
 static Evas_Object *__win;
 static Evas_Object *__bg;
 static Evas_Object *__conform;
+static int __type;
+
+enum loader_type {
+	TYPE_COMMON,
+	TYPE_SW,
+	TYPE_HW,
+	MAX_LOADER_TYPE
+};
+
+enum acc_type {
+	SW_ACC,
+	HW_ACC,
+	MAX_ACC_TYPE
+};
+
+typedef void (*loader_convertible)(void);
 
 static void __vconf_cb(keynode_t *key, void *data)
 {
@@ -89,6 +111,8 @@ static void __init_window(void)
 
 static void __fini_window(void)
 {
+	_D("Drop window");
+
 	if (__conform) {
 		evas_object_del(__conform);
 		elm_conformant_precreated_object_set(NULL);
@@ -112,6 +136,28 @@ static void __loader_create_cb(bundle *extra, int type, void *user_data)
 {
 	int elm_init_cnt = 0;
 	int ret;
+	char *ltype = NULL;
+
+	if (extra == NULL) {
+		_E("No extra data");
+		return;
+	}
+
+	bundle_get_str(extra, KEY_LOADER_TYPE, &ltype);
+
+	if (ltype == NULL) {
+		_E("No loader type");
+		return;
+	}
+
+	if (!strcmp(LOADER_TYPE_COMMON, ltype))
+		__type = TYPE_COMMON;
+	else if (!strcmp(LOADER_TYPE_SW, ltype))
+		__type = TYPE_SW;
+	else if (!strcmp(LOADER_TYPE_HW, ltype))
+		__type = TYPE_HW;
+
+	_D("Loader type:%d", __type);
 
 	__preload_init(__argc, __argv);
 	__preload_init_for_process_pool();
@@ -119,8 +165,21 @@ static void __loader_create_cb(bundle *extra, int type, void *user_data)
 	elm_init_cnt = elm_init(__argc, __argv);
 	_D("[candidate] elm init, returned: %d", elm_init_cnt);
 
-	elm_config_accel_preference_set("hw");
-	__init_window();
+	switch (__type) {
+	case TYPE_SW:
+		elm_config_accel_preference_set("none");
+		__init_window();
+		break;
+
+	case TYPE_HW:
+		elm_config_accel_preference_set("hw");
+		__init_window();
+		break;
+
+	default:
+		//TODO
+		break;
+	}
 
 	ret = vconf_get_int(VCONFKEY_SETAPPL_APP_HW_ACCELERATION, &__sys_hwacc);
 	if (ret != VCONF_OK) {
@@ -137,12 +196,22 @@ static void __loader_create_cb(bundle *extra, int type, void *user_data)
 	malloc_trim(0);
 }
 
+static loader_convertible __converter_table[MAX_LOADER_TYPE][MAX_ACC_TYPE] = {
+	[TYPE_COMMON][SW_ACC] = NULL,
+	[TYPE_COMMON][HW_ACC] = NULL,
+	[TYPE_SW][SW_ACC] = NULL,
+	[TYPE_SW][HW_ACC] = __fini_window,
+	[TYPE_HW][SW_ACC] = __fini_window,
+	[TYPE_HW][HW_ACC] = NULL,
+};
+
 static int __loader_launch_cb(int argc, char **argv, const char *app_path,
 		const char *appid, const char *pkgid, const char *pkg_type,
 		void *user_data)
 {
 	const char *hwacc;
 	bundle *kb = launchpad_loader_get_bundle();
+	int acc = SW_ACC;
 
 	vconf_ignore_key_changed(VCONFKEY_SETAPPL_APP_HW_ACCELERATION, __vconf_cb);
 	if (kb == NULL)
@@ -153,18 +222,15 @@ static int __loader_launch_cb(int argc, char **argv, const char *app_path,
 	if (!hwacc)
 		return 0;
 
-	if (strcmp(hwacc, "USE") == 0) {
-		_D("Use preinitialized window");
-		return 0;
-	} else if (strcmp(hwacc, "SYS") == 0 &&
-			__sys_hwacc == SETTING_HW_ACCELERATION_ON) {
-		_D("Use preinitialized window");
-		return 0;
+	if (strcmp(hwacc, "USE") == 0 ||
+		(strcmp(hwacc, "SYS") == 0 &&
+			__sys_hwacc == SETTING_HW_ACCELERATION_ON)) {
+		acc = HW_ACC;
 	}
 
-	_D("Dispose window");
-	__fini_window();
-	elm_config_accel_preference_set("none");
+	loader_convertible convert = __converter_table[__type][acc];
+	if (convert)
+		convert();
 
 	return 0;
 }

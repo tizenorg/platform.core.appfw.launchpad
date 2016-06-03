@@ -292,7 +292,7 @@ static int __get_launchpad_type(const char *internal_pool, const char *hwacc,
 	if (type >= LAUNCHPAD_TYPE_USER)
 		return type;
 
-	return LAUNCHPAD_TYPE_HW;
+	return LAUNCHPAD_TYPE_UNSUPPORTED;
 }
 
 static int __get_loader_id(bundle *kb)
@@ -1200,6 +1200,8 @@ static void __add_slot_from_info(gpointer data, gpointer user_data)
 {
 	loader_info_t *info = (loader_info_t *)data;
 	candidate_process_context_t *cpc;
+	bundle_raw *extra = NULL;
+	int len;
 
 	if (!strcmp(info->exe, "null")) {
 		cpc = __add_slot(LAUNCHPAD_TYPE_USER + user_slot_offset, PAD_LOADER_ID_DIRECT,
@@ -1213,8 +1215,11 @@ static void __add_slot_from_info(gpointer data, gpointer user_data)
 	}
 
 	if (access(info->exe, F_OK | X_OK) == 0) {
+		if (info->extra)
+			bundle_encode(info->extra, &extra, &len);
+
 		cpc = __add_slot(LAUNCHPAD_TYPE_USER + user_slot_offset, PAD_LOADER_ID_STATIC,
-				0, info->exe, NULL, info->detection_method, info->timeout_val);
+				0, info->exe, (char *)extra, info->detection_method, info->timeout_val);
 		if (cpc == NULL)
 			return;
 
@@ -1227,7 +1232,7 @@ static void __add_slot_from_info(gpointer data, gpointer user_data)
 	}
 }
 
-static void __add_default_slots_from_file(void)
+static int __add_default_slots(void)
 {
 	if (loader_info_list)
 		_loader_info_dispose(loader_info_list);
@@ -1235,29 +1240,11 @@ static void __add_default_slots_from_file(void)
 	loader_info_list = _loader_info_load(LOADER_INFO_PATH);
 
 	if (loader_info_list == NULL)
-		return;
+		return -1;
 
 	user_slot_offset = 0;
 	g_list_foreach(loader_info_list, __add_slot_from_info, NULL);
-}
 
-static int __add_default_slots(void)
-{
-	candidate_process_context_t *cpc;
-	int ret;
-
-	cpc = __add_slot(LAUNCHPAD_TYPE_HW, PAD_LOADER_ID_STATIC, 0,
-			LOADER_PATH_DEFAULT, NULL,
-			METHOD_TIMEOUT | METHOD_VISIBILITY, 5000);
-	if (cpc == NULL)
-		return -1;
-
-	ret = __prepare_candidate_process(LAUNCHPAD_TYPE_HW,
-			PAD_LOADER_ID_STATIC);
-	if (ret != 0)
-		return -1;
-
-	__add_default_slots_from_file();
 	return 0;
 }
 

@@ -30,9 +30,17 @@
 #define TAG_APP_TYPE	"APP_TYPE"
 #define TAG_DETECTION_METHOD	"DETECTION_METHOD"
 #define TAG_TIMEOUT	"TIMEOUT"
+#define TAG_EXTRA	"EXTRA"
+#define TAG_EXTRA_ARRAY		"EXTRA_ARRAY"
+#define TAG_EXTRA_ARRAY_VAL	"EXTRA_ARRAY_VAL"
+#define TAG_ALTERNATIVE_LOADER	"ALTERNATIVE_LOADER"
+#define TAG_HW_ACC		"HW_ACC"
+#define VAL_ON			"ON"
+#define VAL_OFF			"OFF"
 #define VAL_METHOD_TIMEOUT	"TIMEOUT"
 #define VAL_METHOD_DEMAND	"DEMAND"
 #define VAL_METHOD_VISIBILITY	"VISIBILITY"
+
 
 static loader_info_t *__create_loader_info()
 {
@@ -42,8 +50,11 @@ static loader_info_t *__create_loader_info()
 	info->name = NULL;
 	info->exe = NULL;
 	info->app_type = NULL;
+	info->hw_acc = NULL;
+	info->alternative_loaders = NULL;
 	info->detection_method = METHOD_TIMEOUT | METHOD_VISIBILITY;
 	info->timeout_val = 5000;
+	info->extra = bundle_create();
 
 	return info;
 }
@@ -71,6 +82,56 @@ static void __parse_detection_method(loader_info_t *info, char *line)
 	_D("detection_method:%d", info->detection_method);
 }
 
+static void __parse_extra(loader_info_t *info, char *line)
+{
+	char tok1[MAX_LOCAL_BUFSZ] = { 0, };
+	char tok2[MAX_LOCAL_BUFSZ] = { 0, };
+	char tok3[MAX_LOCAL_BUFSZ] = { 0, };
+
+	if (info->extra == NULL)
+		return;
+
+	sscanf(line, "%s %s %s", tok1, tok2, tok3);
+
+	if (strlen(tok2) == 0 || strlen(tok3) == 0)
+		return;
+
+	bundle_add_str(info->extra, tok2, tok3);
+}
+
+static void __add_extra_array_from_list(bundle *b, const char *key, GList *list)
+{
+	const char **array;
+	int len;
+	int i;
+	GList *cur;
+
+	if (b == NULL || key == NULL || list == NULL)
+		return;
+
+	len = g_list_length(list);
+	array = malloc(sizeof(const char *) * len);
+
+	cur = list;
+	for (i = 0; i < len; i++) {
+		array[i] = cur->data;
+		cur = g_list_next(cur);
+	}
+
+	bundle_add_str_array(b, key, array, len);
+	free(array);
+}
+
+static void __flush_extra_array(bundle *b, char *key, GList *list)
+{
+	if (list) {
+		__add_extra_array_from_list(b, key, list);
+		g_list_free_full(list, free);
+	}
+
+	free(key);
+}
+
 static GList *__parse_file(GList *list, const char *path)
 {
 	FILE *fp;
@@ -78,6 +139,8 @@ static GList *__parse_file(GList *list, const char *path)
 	char tok1[MAX_LOCAL_BUFSZ];
 	char tok2[MAX_LOCAL_BUFSZ];
 	loader_info_t *cur_info = NULL;
+	char *key = NULL;
+	GList *extra_array = NULL;
 
 	fp = fopen(path, "rt");
 
@@ -90,8 +153,12 @@ static GList *__parse_file(GList *list, const char *path)
 		sscanf(buf, "%s %s", tok1, tok2);
 
 		if (strcasecmp(TAG_LOADER,  tok1) == 0) {
-			if (cur_info != NULL)
+			if (cur_info != NULL) {
+				__flush_extra_array(cur_info->extra, key, extra_array);
+				extra_array = NULL;
+				key = NULL;
 				list = g_list_append(list, cur_info);
+			}
 			cur_info = __create_loader_info();
 			continue;
 		}
@@ -99,20 +166,35 @@ static GList *__parse_file(GList *list, const char *path)
 		if (tok1[0] == '\0' || tok2[0] == '\0' || tok1[0] == '#')
 			continue;
 
-		if (strcasecmp(TAG_NAME,  tok1) == 0)
+		if (strcasecmp(TAG_NAME,  tok1) == 0) {
 			cur_info->name = strdup(tok2);
-		else if (strcasecmp(TAG_EXE, tok1) == 0)
+		} else if (strcasecmp(TAG_EXE, tok1) == 0) {
 			cur_info->exe = strdup(tok2);
-		else if (strcasecmp(TAG_APP_TYPE, tok1) == 0)
+		} else if (strcasecmp(TAG_APP_TYPE, tok1) == 0) {
 			cur_info->app_type = strdup(tok2);
-		else if (strcasecmp(TAG_DETECTION_METHOD, tok1) == 0)
+		} else if (strcasecmp(TAG_DETECTION_METHOD, tok1) == 0) {
 			__parse_detection_method(cur_info, &buf[strlen(tok1)]);
-		else if (strcasecmp(TAG_TIMEOUT,  tok1) == 0)
+		} else if (strcasecmp(TAG_TIMEOUT,  tok1) == 0) {
 			cur_info->timeout_val = atoi(tok2);
+		} else if (strcasecmp(TAG_EXTRA,  tok1) == 0) {
+			__parse_extra(cur_info, buf);
+		} else if (strcasecmp(TAG_EXTRA_ARRAY, tok1) == 0) {
+			__flush_extra_array(cur_info->extra, key, extra_array);
+			extra_array = NULL;
+			key = strdup(tok2);
+		} else if (strcasecmp(TAG_EXTRA_ARRAY_VAL, tok1) == 0) {
+			extra_array = g_list_append(extra_array, strdup(tok2));
+		} else if (strcasecmp(TAG_HW_ACC, tok1) == 0) {
+			cur_info->hw_acc = strdup(tok2);
+		} else if (strcasecmp(TAG_ALTERNATIVE_LOADER, tok1) == 0) {
+			cur_info->alternative_loaders = g_list_append(cur_info->alternative_loaders, strdup(tok2));
+		}
 	}
 
-	if (cur_info != NULL)
+	if (cur_info != NULL) {
+		__flush_extra_array(cur_info->extra, key, extra_array);
 		list = g_list_append(list, cur_info);
+	}
 
 	fclose(fp);
 
@@ -158,6 +240,11 @@ static void __free_info(gpointer data)
 	free(info->name);
 	free(info->exe);
 	free(info->app_type);
+	free(info->hw_acc);
+	if (info->extra)
+		bundle_free(info->extra);
+	if (info->alternative_loaders)
+		g_list_free_full(info->alternative_loaders, free);
 
 	free(info);
 }
@@ -188,7 +275,4 @@ int _loader_info_find_type_by_app_type(GList *info,  const char *app_type)
 
 	return cur_info->type;
 }
-
-
-
 
