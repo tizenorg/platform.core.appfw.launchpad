@@ -12,6 +12,7 @@ PKG_CHECK_MODULES(${this_target_pool} REQUIRED
 	bundle
 	gio-2.0
 	ttrace
+	vconf
 	)
 
 FOREACH(flag ${${this_target_pool}_CFLAGS})
