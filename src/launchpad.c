@@ -32,6 +32,7 @@
 #include <glib.h>
 #include <linux/limits.h>
 #include <ttrace.h>
+#include <vconf.h>
 
 #include "perf.h"
 #include "launchpad_common.h"
@@ -71,6 +72,7 @@ typedef struct {
 	int loader_id;
 } loader_context_t;
 
+static int __sys_hwacc;
 static GList *loader_info_list;
 static int user_slot_offset;
 static GList *candidate_slot_list;
@@ -281,18 +283,6 @@ error:
 static int __set_access(const char *appid)
 {
 	return security_manager_prepare_app(appid);
-}
-
-static int __get_launchpad_type(const char *internal_pool, const char *hwacc,
-		const char *app_type)
-{
-	int type;
-
-	type = _loader_info_find_type_by_app_type(loader_info_list,  app_type);
-	if (type >= LAUNCHPAD_TYPE_USER)
-		return type;
-
-	return LAUNCHPAD_TYPE_HW;
 }
 
 static int __get_loader_id(bundle *kb)
@@ -911,6 +901,51 @@ static int __check_caller_by_pid(int pid)
 	return -1;
 }
 
+static bool __is_hw_acc(const char *hwacc)
+{
+	if (strcmp(hwacc, "USE") == 0 ||
+		(strcmp(hwacc, "SYS") == 0 &&
+			__sys_hwacc == SETTING_HW_ACCELERATION_ON))
+		return true;
+
+	return false;
+}
+
+static candidate_process_context_t *__find_available_slot(const char *hwacc,
+		const char *app_type)
+{
+	int type;
+	candidate_process_context_t *cpc;
+	int *a_types;
+	int len = 0;
+	int i;
+
+	type = _loader_info_find_type(loader_info_list,  app_type, __is_hw_acc(hwacc));
+	cpc = __find_slot(type, PAD_LOADER_ID_STATIC);
+	if (!cpc)
+		return NULL;
+
+	if (cpc->prepared)
+		return cpc;
+
+	a_types = _loader_get_alternative_types(loader_info_list, type, &len);
+	if (!a_types)
+		return NULL;
+
+	for (i = 0; i < len; i++) {
+		cpc = __find_slot(a_types[i], PAD_LOADER_ID_STATIC);
+		if (!cpc)
+			continue;
+		if (cpc->prepared) {
+			free(a_types);
+			return cpc;
+		}
+	}
+
+	free(a_types);
+	return NULL;
+}
+
 static gboolean __handle_launch_event(gpointer data)
 {
 	loader_context_t *lc = (loader_context_t *) data;
@@ -918,7 +953,7 @@ static gboolean __handle_launch_event(gpointer data)
 	bundle *kb = NULL;
 	app_pkt_t *pkt = NULL;
 	appinfo_t *menu_info = NULL;
-	candidate_process_context_t *cpc;
+	candidate_process_context_t *cpc = NULL;
 	const char *app_path = NULL;
 	int pid = -1;
 	int clifd = -1;
@@ -1006,21 +1041,15 @@ static gboolean __handle_launch_event(gpointer data)
 	SECURE_LOGD("app_type : %s\n", menu_info->app_type);
 	SECURE_LOGD("pkg_type : %s\n", menu_info->pkg_type);
 
-	if ((loader_id = __get_loader_id(kb)) <= PAD_LOADER_ID_STATIC) {
-		type = __get_launchpad_type(menu_info->internal_pool,
-				menu_info->hwacc, menu_info->app_type);
-		if (type < 0) {
-			_E("failed to get launchpad type");
-			goto end;
-		}
 
-		if (menu_info->comp_type &&
-				strcmp(menu_info->comp_type, "svcapp") == 0)
-			loader_id = PAD_LOADER_ID_DIRECT;
-		else
-			loader_id = PAD_LOADER_ID_STATIC;
+	if (menu_info->comp_type &&
+				strcmp(menu_info->comp_type, "svcapp") == 0) {
+		loader_id = PAD_LOADER_ID_DIRECT;
+	} else if ((loader_id = __get_loader_id(kb)) <= PAD_LOADER_ID_STATIC) {
+		cpc = __find_available_slot(menu_info->hwacc, menu_info->app_type);
 	} else {
 		type = LAUNCHPAD_TYPE_DYNAMIC;
+		cpc = __find_slot(type, loader_id);
 	}
 
 	_modify_bundle(kb, cr.pid, menu_info, pkt->cmd);
@@ -1031,21 +1060,13 @@ static gboolean __handle_launch_event(gpointer data)
 
 	PERF("get package information & modify bundle done");
 
-	if (loader_id == PAD_LOADER_ID_DIRECT ||
-		(cpc = __find_slot(type, loader_id)) == NULL) {
-		_W("Launch directly");
+	if (loader_id == PAD_LOADER_ID_DIRECT || cpc == NULL) {
+		_W("Launch directly %d %d", loader_id, cpc);
 		pid = __launch_directly(menu_info->appid, app_path, clifd, kb,
 				menu_info, NULL);
 	} else {
-		if (cpc->prepared) {
-			_W("Launch %d type process", type);
-			pid = __send_launchpad_loader(cpc, pkt, app_path,
-					clifd);
-		} else {
-			_W("Launch directly");
-			pid = __launch_directly(menu_info->appid, app_path,
-					clifd, kb, menu_info, cpc);
-		}
+		_W("Launch %d type process", cpc->type);
+		pid = __send_launchpad_loader(cpc, pkt, app_path, clifd);
 	}
 
 	__send_result_to_caller(clifd, pid, app_path);
@@ -1200,6 +1221,8 @@ static void __add_slot_from_info(gpointer data, gpointer user_data)
 {
 	loader_info_t *info = (loader_info_t *)data;
 	candidate_process_context_t *cpc;
+	bundle_raw *extra = NULL;
+	int len;
 
 	if (!strcmp(info->exe, "null")) {
 		cpc = __add_slot(LAUNCHPAD_TYPE_USER + user_slot_offset, PAD_LOADER_ID_DIRECT,
@@ -1213,8 +1236,11 @@ static void __add_slot_from_info(gpointer data, gpointer user_data)
 	}
 
 	if (access(info->exe, F_OK | X_OK) == 0) {
+		if (info->extra)
+			bundle_encode(info->extra, &extra, &len);
+
 		cpc = __add_slot(LAUNCHPAD_TYPE_USER + user_slot_offset, PAD_LOADER_ID_STATIC,
-				0, info->exe, NULL, info->detection_method, info->timeout_val);
+				0, info->exe, (char *)extra, info->detection_method, info->timeout_val);
 		if (cpc == NULL)
 			return;
 
@@ -1227,7 +1253,7 @@ static void __add_slot_from_info(gpointer data, gpointer user_data)
 	}
 }
 
-static void __add_default_slots_from_file(void)
+static int __add_default_slots(void)
 {
 	if (loader_info_list)
 		_loader_info_dispose(loader_info_list);
@@ -1235,30 +1261,23 @@ static void __add_default_slots_from_file(void)
 	loader_info_list = _loader_info_load(LOADER_INFO_PATH);
 
 	if (loader_info_list == NULL)
-		return;
+		return -1;
 
 	user_slot_offset = 0;
 	g_list_foreach(loader_info_list, __add_slot_from_info, NULL);
+
+	return 0;
 }
 
-static int __add_default_slots(void)
+static void __vconf_cb(keynode_t *key, void *data)
 {
-	candidate_process_context_t *cpc;
-	int ret;
+	const char *name;
 
-	cpc = __add_slot(LAUNCHPAD_TYPE_HW, PAD_LOADER_ID_STATIC, 0,
-			LOADER_PATH_DEFAULT, NULL,
-			METHOD_TIMEOUT | METHOD_VISIBILITY, 5000);
-	if (cpc == NULL)
-		return -1;
-
-	ret = __prepare_candidate_process(LAUNCHPAD_TYPE_HW,
-			PAD_LOADER_ID_STATIC);
-	if (ret != 0)
-		return -1;
-
-	__add_default_slots_from_file();
-	return 0;
+	name = vconf_keynode_get_name(key);
+	if (name && strcmp(name, VCONFKEY_SETAPPL_APP_HW_ACCELERATION) == 0) {
+		__sys_hwacc = vconf_keynode_get_int(key);
+		_D("sys hwacc: %d", __sys_hwacc);
+	}
 }
 
 static int __before_loop(int argc, char **argv)
@@ -1275,6 +1294,19 @@ static int __before_loop(int argc, char **argv)
 	if (ret != 0) {
 		_E("__init_launchpad_fd() failed");
 		return -1;
+	}
+
+	ret = vconf_get_int(VCONFKEY_SETAPPL_APP_HW_ACCELERATION, &__sys_hwacc);
+	if (ret != VCONF_OK) {
+		_E("Failed to get vconf int: %s",
+				VCONFKEY_SETAPPL_APP_HW_ACCELERATION);
+	}
+
+	ret = vconf_notify_key_changed(VCONFKEY_SETAPPL_APP_HW_ACCELERATION,
+			__vconf_cb, NULL);
+	if (ret != 0) {
+		_E("Failed to register callback for %s",
+				VCONFKEY_SETAPPL_APP_HW_ACCELERATION);
 	}
 
 	return 0;
