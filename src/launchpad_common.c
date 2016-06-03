@@ -211,13 +211,6 @@ int _create_server_sock(const char *name)
 		return -1;
 	}
 
-	if (chmod(saddr.sun_path, (S_IRWXU | S_IRWXG | S_IRWXO)) < 0) {
-		/* Flawfinder: ignore*/
-		_E("failed to change the socket permission");
-		close(fd);
-		return -1;
-	}
-
 	_set_sock_option(fd, 0);
 
 	if (listen(fd, 128) == -1) {
