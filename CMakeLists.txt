@@ -12,6 +12,7 @@ PKG_CHECK_MODULES(${this_target_pool} REQUIRED
 	bundle
 	gio-2.0
 	ttrace
+	vconf
 	)
 
 FOREACH(flag ${${this_target_pool}_CFLAGS})
@@ -107,9 +108,7 @@ SET_TARGET_PROPERTIES(${LAUNCHPAD_PROCESS_POOL}
 
 INSTALL(TARGETS ${LAUNCHPAD_PROCESS_POOL} DESTINATION bin)
 
-CONFIGURE_FILE(packaging/preload_list.txt.in packaging/preload_list.txt @ONLY)
-INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/packaging/preload_list.txt DESTINATION share/aul)
-INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/packaging/launchpad-process-pool-preload-list.txt DESTINATION share/aul)
+CONFIGURE_FILE(packaging/default.loader.in packaging/default.loader @ONLY)
 INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/packaging/default.loader DESTINATION share/aul)
 
 # liblaunchpad

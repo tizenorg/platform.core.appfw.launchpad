@@ -77,8 +77,6 @@ cp %{_builddir}/%{name}-%{version}/LICENSE  %{buildroot}/usr/share/license/%{nam
 %files
 %manifest launchpad.manifest
 %{_prefix}/share/license/%{name}
-%{_prefix}/share/aul/preload_list.txt
-%{_prefix}/share/aul/launchpad-process-pool-preload-list.txt
 %{_prefix}/share/aul/default.loader
 %{_unitdir_user}/launchpad-process-pool.service
 %{_unitdir_user}/launchpad-process-pool.socket

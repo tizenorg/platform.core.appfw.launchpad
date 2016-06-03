@@ -21,6 +21,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/prctl.h>
+#include <malloc.h>
 #ifdef _APPFW_FEATURE_LOADER_PRIORITY
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -351,6 +352,7 @@ static int __before_loop(int argc, char **argv)
 	if (extra)
 		bundle_free(extra);
 
+	malloc_trim(0);
 #ifdef _APPFW_FEATURE_LOADER_PRIORITY
 	res = setpriority(PRIO_PGRP, 0, 0);
 	if (res == -1) {

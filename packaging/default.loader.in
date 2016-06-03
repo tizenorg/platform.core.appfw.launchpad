@@ -1,0 +1,55 @@
+[LOADER]
+NAME	wrt-loader
+EXE	/usr/bin/wrt-loader
+APP_TYPE	webapp
+DETECTION_METHOD	TIMEOUT|DEMAND
+TIMEOUT		5000
+
+[LOADER]
+NAME jsnative-loader
+EXE /usr/bin/jsnative-loader
+APP_TYPE jsapp
+DETECTION_METHOD	TIMEOUT|VISIBILITY
+TIMEOUT		5000
+
+[LOADER]
+NAME cs-loader
+EXE null
+APP_TYPE csapp
+
+[LOADER]
+NAME	hw-loader1
+EXE	/usr/bin/launchpad-loader
+APP_TYPE	capp|c++app
+HW_ACC		ON
+DETECTION_METHOD	TIMEOUT|VISIBILITY
+TIMEOUT		5000
+EXTRA		loader_type	 hw-loader
+EXTRA_ARRAY		preload
+EXTRA_ARRAY_VAL		@LIB_INSTALL_DIR@/libappcore-efl.so.1
+EXTRA_ARRAY_VAL		@LIB_INSTALL_DIR@/libappcore-common.so.1
+EXTRA_ARRAY_VAL		@LIB_INSTALL_DIR@/libcapi-appfw-application.so.0
+EXTRA_ARRAY_VAL		@LIB_INSTALL_DIR@/ecore_imf/modules/wayland/v-1.16/libwltextinputmodule.so
+EXTRA_ARRAY_VAL		@LIB_INSTALL_DIR@/libdali-toolkit.so
+EXTRA_ARRAY_VAL		@LIB_INSTALL_DIR@/libcairo.so.2
+EXTRA_ARRAY_VAL		@LIB_INSTALL_DIR@/libefl-assist.so.0
+EXTRA_ARRAY_VAL		@LIB_INSTALL_DIR@/libcapi-media-player.so.0
+EXTRA_ARRAY_VAL		@LIB_INSTALL_DIR@/libcapi-media-camera.so.0
+ALTERNATIVE_LOADER	common-loader1
+
+[LOADER]
+NAME	common-loader1
+EXE	/usr/bin/launchpad-loader
+APP_TYPE	capp|c++app
+DETECTION_METHOD	TIMEOUT|VISIBILITY
+TIMEOUT		5000
+EXTRA		loader_type	common-loader
+EXTRA_ARRAY		preload
+EXTRA_ARRAY_VAL		@LIB_INSTALL_DIR@/libappcore-efl.so.1
+EXTRA_ARRAY_VAL		@LIB_INSTALL_DIR@/libappcore-common.so.1
+EXTRA_ARRAY_VAL		@LIB_INSTALL_DIR@/libcapi-appfw-application.so.0
+EXTRA_ARRAY_VAL		@LIB_INSTALL_DIR@/ecore_imf/modules/wayland/v-1.16/libwltextinputmodule.so
+ALTERNATIVE_LOADER	hw-loader1
+
+
+
