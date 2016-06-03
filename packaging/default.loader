@@ -1,19 +1,67 @@
 [LOADER]
-NAME	wrt-loader
-EXE	/usr/bin/wrt-loader
-APP_TYPE	webapp
-DETECTION_METHOD	TIMEOUT|DEMAND
-TIMEOUT		5000
-
-[LOADER]
-NAME jsnative-loader
-EXE /usr/bin/jsnative-loader
-APP_TYPE jsapp
+NAME	hw-loader1
+EXE	null
+APP_TYPE	capp
+HW_ACC		ON
 DETECTION_METHOD	TIMEOUT|VISIBILITY
 TIMEOUT		5000
+EXTRA		loader_type	 hw-loader
+EXTRA_ARRAY		preload
+EXTRA_ARRAY_VAL		/usr/lib/libappcore-efl.so.1
+EXTRA_ARRAY_VAL		/usr/lib/libappcore-common.so.1
+EXTRA_ARRAY_VAL		/usr/lib/libcapi-appfw-application.so.0
+EXTRA_ARRAY_VAL		/usr/lib/ecore_imf/modules/wayland/v-1.16/libwltextinputmodule.so
+EXTRA_ARRAY_VAL		/usr/lib/libdali-toolkit.so
+EXTRA_ARRAY_VAL		/usr/lib/libcairo.so.2
+EXTRA_ARRAY_VAL		/usr/lib/libefl-assist.so.0
+EXTRA_ARRAY_VAL		/usr/lib/libcapi-media-player.so.0
+EXTRA_ARRAY_VAL		/usr/lib/libcapi-media-camera.so.0
+ALTERNATIVE_LOADER	common-loader1
+ALTERNATIVE_LOADER	common-loader2
+ALTERNATIVE_LOADER	sw-loader1
 
 [LOADER]
-NAME cs-loader
-EXE null
-APP_TYPE csapp
+NAME	sw-loader1
+EXE	/usr/bin/launchpad-loader
+APP_TYPE	capp
+HW_ACC		OFF
+DETECTION_METHOD	TIMEOUT|VISIBILITY
+TIMEOUT		5000
+EXTRA		loader_type	sw-loader
+EXTRA_ARRAY		preload
+EXTRA_ARRAY_VAL		/usr/lib/libappcore-efl.so.1
+EXTRA_ARRAY_VAL		/usr/lib/libappcore-common.so.1
+EXTRA_ARRAY_VAL		/usr/lib/libcapi-appfw-application.so.0
+EXTRA_ARRAY_VAL		/usr/lib/ecore_imf/modules/wayland/v-1.16/libwltextinputmodule.so
+EXTRA_ARRAY_VAL		/usr/lib/libdali-toolkit.so
+EXTRA_ARRAY_VAL		/usr/lib/libcairo.so.2
+EXTRA_ARRAY_VAL		/usr/lib/libefl-assist.so.0
+EXTRA_ARRAY_VAL		/usr/lib/libcapi-media-player.so.0
+EXTRA_ARRAY_VAL		/usr/lib/libcapi-media-camera.so.0
+ALTERNATIVE_LOADER	common-loader1
+ALTERNATIVE_LOADER	common-loader2
+ALTERNATIVE_LOADER	hw-loader1
+
+[LOADER]
+NAME	common-loader1
+EXE	/usr/bin/launchpad-loader
+APP_TYPE	capp
+DETECTION_METHOD	TIMEOUT|VISIBILITY
+TIMEOUT		5000
+EXTRA		loader_type	common-loader
+EXTRA_ARRAY		preload
+EXTRA_ARRAY_VAL		/usr/lib/libappcore-efl.so.1
+EXTRA_ARRAY_VAL		/usr/lib/libappcore-common.so.1
+EXTRA_ARRAY_VAL		/usr/lib/libcapi-appfw-application.so.0
+EXTRA_ARRAY_VAL		/usr/lib/ecore_imf/modules/wayland/v-1.16/libwltextinputmodule.so
+
+[LOADER]
+NAME	common-loader2
+EXE	/usr/bin/launchpad-loader
+APP_TYPE	capp
+DETECTION_METHOD	TIMEOUT|VISIBILITY
+TIMEOUT		5000
+EXTRA		loader_type	common-loader
+
+
 
