@@ -18,6 +18,7 @@
 
 #include <stdbool.h>
 #include <glib.h>
+#include <bundle.h>
 
 #define METHOD_TIMEOUT		0x1
 #define METHOD_VISIBILITY	0x2
@@ -30,11 +31,14 @@ typedef struct _loader_info {
 	char *app_type;
 	int detection_method;
 	int timeout_val;
+	char *hw_acc;
+	GList *alternative_loaders;
+	bundle *extra;
 } loader_info_t;
 
 GList *_loader_info_load(const char *path);
 void _loader_info_dispose(GList *info);
-int _loader_info_find_type_by_app_type(GList *info,  const char *app_type);
-
+int _loader_info_find_type(GList *info,  const char *app_type, bool hwacc);
+int *_loader_get_alternative_types(GList *info, int type, int *len);
 
 
