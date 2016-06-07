@@ -49,6 +49,7 @@
 #define PROCESS_POOL_LAUNCHPAD_SOCK ".launchpad-process-pool-sock"
 #define LOADER_PATH_DEFAULT "/usr/bin/launchpad-loader"
 #define LOADER_INFO_PATH	"/usr/share/aul"
+#define REGULAR_UID_MIN 5000
 
 typedef struct {
 	int type;
@@ -891,11 +892,10 @@ static int __check_caller_by_pid(int pid)
 	char buf[PATH_MAX] = { 0, };
 
 	ret = _proc_get_attr_by_pid(pid, buf, sizeof(buf));
-
 	if (ret < 0)
 		return -1;
 
-	if (strcmp(buf, "User") == 0 || strcmp(buf, "System") == 0)
+	if (strcmp(buf, "User") == 0)
 		return 0;
 
 	return -1;
@@ -969,9 +969,11 @@ static gboolean __handle_launch_event(gpointer data)
 		goto end;
 	}
 
-	if (__check_caller_by_pid(cr.pid) < 0) {
-		_E("Invalid caller pid");
-		goto end;
+	if (cr.uid >= REGULAR_UID_MIN) {
+		if (__check_caller_by_pid(cr.pid) < 0) {
+			_E("Invalid caller pid");
+			goto end;
+		}
 	}
 
 	kb = bundle_decode(pkt->data, pkt->len);
