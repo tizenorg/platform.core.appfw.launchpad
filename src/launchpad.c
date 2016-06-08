@@ -33,6 +33,7 @@
 #include <linux/limits.h>
 #include <ttrace.h>
 #include <vconf.h>
+#include <aul.h>
 
 #include "perf.h"
 #include "launchpad_common.h"
@@ -497,11 +498,16 @@ static int __prepare_exec(const char *appid, const char *app_path,
 	char *file_name;
 	char process_name[AUL_PR_NAME];
 	int ret;
+	int fd;
 
 	/* Set new session ID & new process group ID*/
 	/* In linux, child can set new session ID without check permission */
 	/* TODO : should be add to check permission in the kernel*/
 	setsid();
+
+	fd = _create_server_sock(NULL);
+	if (fd > 0)
+		aul_set_listen_socket(fd);
 
 	/* SET PRIVILEGES*/
 	if (bundle_get_val(kb, AUL_K_PRIVACY_APPID) == NULL) {
@@ -557,7 +563,7 @@ static int __launch_directly(const char *appid, const char *app_path, int clifd,
 		for (iter_fd = 3; iter_fd <= max_fd; iter_fd++)
 			close(iter_fd);
 
-		snprintf(sock_path, sizeof(sock_path), "/run/user/%d/%d",
+		snprintf(sock_path, sizeof(sock_path), "/run/aul/%d/%d",
 				getuid(), getpid());
 		unlink(sock_path);
 
