@@ -184,7 +184,10 @@ int _create_server_sock(const char *name)
 	struct sockaddr_un saddr;
 	int fd;
 
-	fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+	if (name)
+		fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+	else
+		fd = socket(AF_UNIX, SOCK_STREAM, 0);
 	/*  support above version 2.6.27*/
 	if (fd < 0) {
 		if (errno == EINVAL) {
@@ -201,8 +204,14 @@ int _create_server_sock(const char *name)
 
 	memset(&saddr, 0, sizeof(saddr));
 	saddr.sun_family = AF_UNIX;
-	snprintf(saddr.sun_path, sizeof(saddr.sun_path), "/run/user/%d/%s",
-			getuid(), name);
+
+	if (name) {
+		snprintf(saddr.sun_path, sizeof(saddr.sun_path),
+				"%s/%d/%s", SOCKET_PATH, getuid(), name);
+	} else {
+		snprintf(saddr.sun_path, sizeof(saddr.sun_path),
+				"%s/%d/%d", SOCKET_PATH, getuid(), getpid());
+	}
 	unlink(saddr.sun_path);
 
 	if (bind(fd, (struct sockaddr *)&saddr, sizeof(saddr)) < 0) {
@@ -667,5 +676,18 @@ int _proc_get_attr_by_pid(int pid, char *buf, int size)
 		return -1;
 
 	return 0;
+}
+
+void _prepare_listen_sock(void)
+{
+	int fd;
+	char buf[12];
+
+	fd = _create_server_sock(NULL);
+	if (fd < 0)
+		return;
+
+	snprintf(buf, sizeof(buf), "%d", fd);
+	setenv("AUL_LISTEN_SOCK", buf, 1);
 }
 
