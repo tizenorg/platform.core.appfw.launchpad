@@ -1,23 +1,4 @@
 [LOADER]
-NAME	wrt-loader
-EXE	/usr/bin/wrt-loader
-APP_TYPE	webapp
-DETECTION_METHOD	TIMEOUT|DEMAND
-TIMEOUT		5000
-
-[LOADER]
-NAME jsnative-loader
-EXE /usr/bin/jsnative-loader
-APP_TYPE jsapp
-DETECTION_METHOD	TIMEOUT|VISIBILITY
-TIMEOUT		5000
-
-[LOADER]
-NAME cs-loader
-EXE null
-APP_TYPE csapp
-
-[LOADER]
 NAME	hw-loader1
 EXE	/usr/bin/launchpad-loader
 APP_TYPE	capp|c++app
