@@ -201,8 +201,14 @@ int _create_server_sock(const char *name)
 
 	memset(&saddr, 0, sizeof(saddr));
 	saddr.sun_family = AF_UNIX;
-	snprintf(saddr.sun_path, sizeof(saddr.sun_path), "/run/user/%d/%s",
-			getuid(), name);
+
+	if (name) {
+		snprintf(saddr.sun_path, sizeof(saddr.sun_path),
+				"%s/%d/%s", SOCKET_PATH, getuid(), name);
+	} else {
+		snprintf(saddr.sun_path, sizeof(saddr.sun_path),
+				"%s/%d/%d", SOCKET_PATH, getuid(), getpid());
+	}
 	unlink(saddr.sun_path);
 
 	if (bind(fd, (struct sockaddr *)&saddr, sizeof(saddr)) < 0) {

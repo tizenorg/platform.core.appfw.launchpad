@@ -125,6 +125,7 @@ static int __default_launch_cb(bundle *kb, const char *appid,
 		const char *app_path, const char *pkg_type, int loader_type)
 {
 	char err_str[MAX_LOCAL_BUFSZ] = { 0, };
+	int fd;
 #ifdef _APPFW_FEATURE_PRIORITY_CHANGE
 	int res;
 	const char *high_priority = bundle_get_val(kb, AUL_K_HIGHPRIORITY);
@@ -141,6 +142,10 @@ static int __default_launch_cb(bundle *kb, const char *appid,
 	}
 	bundle_del(kb, AUL_K_HIGHPRIORITY);
 #endif
+
+	fd = _create_server_sock(NULL);
+	if (fd > 0)
+		aul_set_listen_socket(fd);
 
 	if (__prepare_exec(appid, app_path, pkg_type, loader_type) < 0) {
 		_E("__candidate_process_prepare_exec() failed");
