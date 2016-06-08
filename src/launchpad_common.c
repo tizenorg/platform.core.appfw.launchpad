@@ -540,6 +540,8 @@ int _connect_to_launchpad(int type, int id)
 	int retry = CONNECT_RETRY_COUNT;
 	int send_ret = -1;
 	int client_pid = getpid();
+	struct stat statbuf;
+	int ret;
 
 	_D("[launchpad] enter, type: %d", type);
 
@@ -554,6 +556,19 @@ int _connect_to_launchpad(int type, int id)
 	snprintf(addr.sun_path, sizeof(addr.sun_path), "%s/%d/%s%d-%d",
 			SOCKET_PATH, getuid(), LAUNCHPAD_LOADER_SOCKET_NAME,
 			type, id);
+
+	ret = stat(addr.sun_path, &statbuf);
+	if (ret < 0) {
+		_E("Failed to get file status - %s", addr.sun_path);
+		close(fd);
+		return -1;
+	}
+
+	if (S_ISSOCK(statbuf.st_mode) == 0 || S_ISLNK(statbuf.st_mode)) {
+		_E("%s is not a socket", addr.sun_path);
+		close(fd);
+		return - 1;
+	}
 
 	_D("connect to %s", addr.sun_path);
 	while (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
