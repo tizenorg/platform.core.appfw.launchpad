@@ -504,6 +504,8 @@ static int __prepare_exec(const char *appid, const char *app_path,
 	/* TODO : should be add to check permission in the kernel*/
 	setsid();
 
+	_prepare_listen_sock();
+
 	/* SET PRIVILEGES*/
 	if (bundle_get_val(kb, AUL_K_PRIVACY_APPID) == NULL) {
 		_D("appId: %s / app_path : %s ", appid, app_path);
@@ -558,7 +560,7 @@ static int __launch_directly(const char *appid, const char *app_path, int clifd,
 		for (iter_fd = 3; iter_fd <= max_fd; iter_fd++)
 			close(iter_fd);
 
-		snprintf(sock_path, sizeof(sock_path), "/run/user/%d/%d",
+		snprintf(sock_path, sizeof(sock_path), "/run/aul/%d/%d",
 				getuid(), getpid());
 		unlink(sock_path);
 

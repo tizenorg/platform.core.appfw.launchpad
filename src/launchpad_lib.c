@@ -86,6 +86,8 @@ static int __prepare_exec(const char *appid, const char *app_path,
 
 	__preexec_run(pkg_type, appid, app_path);
 
+	_prepare_listen_sock();
+
 	/* SET PRIVILEGES*/
 	SECURE_LOGD("[candidata] appid : %s / pkg_type : %s / app_path : %s",
 		appid, pkg_type, app_path);
