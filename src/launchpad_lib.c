@@ -114,6 +114,9 @@ static int __prepare_exec(const char *appid, const char *app_path,
 		_D("can't locate file name to execute");
 		return -1;
 	}
+
+	_prepare_listen_sock();
+
 	memset(process_name, '\0', AUL_PR_NAME);
 	snprintf(process_name, AUL_PR_NAME, "%s", file_name);
 	prctl(PR_SET_NAME, process_name);

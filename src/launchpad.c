@@ -515,6 +515,7 @@ static int __prepare_exec(const char *appid, const char *app_path,
 			return -1;
 		}
 	}
+
 	/* SET DUMPABLE - for coredump*/
 	prctl(PR_SET_DUMPABLE, 1);
 
@@ -528,6 +529,9 @@ static int __prepare_exec(const char *appid, const char *app_path,
 		_D("can't locate file name to execute");
 		return -1;
 	}
+
+	_prepare_listen_sock();
+
 	memset(process_name, '\0', AUL_PR_NAME);
 	snprintf(process_name, AUL_PR_NAME, "%s", file_name);
 	prctl(PR_SET_NAME, process_name);
@@ -558,7 +562,7 @@ static int __launch_directly(const char *appid, const char *app_path, int clifd,
 		for (iter_fd = 3; iter_fd <= max_fd; iter_fd++)
 			close(iter_fd);
 
-		snprintf(sock_path, sizeof(sock_path), "/run/user/%d/%d",
+		snprintf(sock_path, sizeof(sock_path), "/run/aul/%d/%d",
 				getuid(), getpid());
 		unlink(sock_path);
 
