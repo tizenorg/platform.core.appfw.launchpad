@@ -25,11 +25,11 @@
 #include <linux/limits.h>
 #include <Elementary.h>
 #include <bundle_internal.h>
-#include <aul.h>
 #include <vconf.h>
 
 #include "launchpad_common.h"
 #include "launchpad.h"
+#include "key.h"
 
 #define KEY_LOADER_TYPE		"loader_type"
 #define LOADER_TYPE_COMMON	"common-loader"
@@ -268,9 +268,17 @@ static void __close_fds(void)
 {
 	int iter_fd;
 	int max_fd = sysconf(_SC_OPEN_MAX);
+	int fd = -1;
+	const char *sockfd;
 
-	for (iter_fd = 3; iter_fd <= max_fd; iter_fd++)
-		close(iter_fd);
+	sockfd = getenv("AUL_LISTEN_SOCK");
+	if (sockfd)
+		fd = atoi(sockfd);
+
+	for (iter_fd = 3; iter_fd <= max_fd; iter_fd++) {
+		if (iter_fd != fd)
+			close(iter_fd);
+	}
 }
 
 static int __loader_terminate_cb(int argc, char **argv, void *user_data)

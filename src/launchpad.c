@@ -249,7 +249,7 @@ static int __listen_candidate_process(int type, int loader_id)
 
 	memset(&addr, 0x00, sizeof(struct sockaddr_un));
 	addr.sun_family = AF_UNIX;
-	snprintf(addr.sun_path, sizeof(addr.sun_path), "%s/%d/%s%d-%d",
+	snprintf(addr.sun_path, sizeof(addr.sun_path), "%s/daemons/%d/%s%d-%d",
 			SOCKET_PATH, getuid(), LAUNCHPAD_LOADER_SOCKET_NAME,
 			type, loader_id);
 
@@ -414,8 +414,8 @@ static int __send_launchpad_loader(candidate_process_context_t *cpc,
 	char sock_path[PATH_MAX];
 	int pid = -1;
 
-	snprintf(sock_path, sizeof(sock_path), "/run/user/%d/%d", getuid(),
-		cpc->pid);
+	snprintf(sock_path, sizeof(sock_path), "/run/aul/apps/%d/%d",
+			getuid(), cpc->pid);
 	unlink(sock_path);
 
 	__candidate_process_real_launch(cpc->send_fd, pkt);
@@ -512,6 +512,7 @@ static int __prepare_exec(const char *appid, const char *app_path,
 			return -1;
 		}
 	}
+
 	/* SET DUMPABLE - for coredump*/
 	prctl(PR_SET_DUMPABLE, 1);
 
@@ -525,6 +526,9 @@ static int __prepare_exec(const char *appid, const char *app_path,
 		_D("can't locate file name to execute");
 		return -1;
 	}
+
+	_prepare_listen_sock();
+
 	memset(process_name, '\0', AUL_PR_NAME);
 	snprintf(process_name, AUL_PR_NAME, "%s", file_name);
 	prctl(PR_SET_NAME, process_name);
@@ -555,7 +559,7 @@ static int __launch_directly(const char *appid, const char *app_path, int clifd,
 		for (iter_fd = 3; iter_fd <= max_fd; iter_fd++)
 			close(iter_fd);
 
-		snprintf(sock_path, sizeof(sock_path), "/run/user/%d/%d",
+		snprintf(sock_path, sizeof(sock_path), "/run/aul/apps/%d/%d",
 				getuid(), getpid());
 		unlink(sock_path);
 
