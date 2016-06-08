@@ -31,7 +31,7 @@
 #define LOG_TAG "LAUNCHPAD"
 #endif
 
-#define SOCKET_PATH "/run/user"
+#define SOCKET_PATH "/run/aul"
 #define LAUNCHPAD_LOADER_SOCKET_NAME ".launchpad-type"
 #define MAX_PENDING_CONNECTIONS 10
 #define MAX_LOCAL_BUFSZ 128
@@ -108,6 +108,7 @@ void _set_sock_option(int fd, int cli);
 void _set_env(appinfo_t *menu_info, bundle *kb);
 char **_create_argc_argv(bundle *kb, int *margc);
 char *_get_libdir(const char *path);
+void _prepare_listen_sock(void);
 
 appinfo_t *_appinfo_create(bundle *kb);
 void _appinfo_free(appinfo_t *menu_info);
