@@ -31,7 +31,7 @@
 #define LOG_TAG "LAUNCHPAD"
 #endif
 
-#define SOCKET_PATH "/run/user"
+#define SOCKET_PATH "/run/aul"
 #define LAUNCHPAD_LOADER_SOCKET_NAME ".launchpad-type"
 #define MAX_PENDING_CONNECTIONS 10
 #define MAX_LOCAL_BUFSZ 128
