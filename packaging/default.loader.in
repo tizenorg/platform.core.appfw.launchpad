@@ -32,5 +32,19 @@ EXTRA_ARRAY_VAL		@LIB_INSTALL_DIR@/libcapi-appfw-application.so.0
 EXTRA_ARRAY_VAL		@LIB_INSTALL_DIR@/ecore_imf/modules/wayland/v-1.16/libwltextinputmodule.so
 ALTERNATIVE_LOADER	hw-loader1
 
+[LOADER]
+NAME	widget-loader1
+EXE	/usr/bin/launchpad-loader
+APP_TYPE	null
+DETECTION_METHOD	TIMEOUT|VISIBILITY
+TIMEOUT		5000
+EXTRA		loader_type	compact-loader
+EXTRA_ARRAY		preload
+EXTRA_ARRAY_VAL		@LIB_INSTALL_DIR@/libcapi-appfw-widget-application.so
+ALTERNATIVE_LOADER	common-loader1
+ALTERNATIVE_LOADER	hw-loader1
+
+
+
 
 

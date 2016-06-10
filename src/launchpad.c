@@ -912,7 +912,7 @@ static bool __is_hw_acc(const char *hwacc)
 }
 
 static candidate_process_context_t *__find_available_slot(const char *hwacc,
-		const char *app_type)
+		const char *app_type, const char *loader_name)
 {
 	int type;
 	candidate_process_context_t *cpc;
@@ -920,7 +920,10 @@ static candidate_process_context_t *__find_available_slot(const char *hwacc,
 	int len = 0;
 	int i;
 
-	type = _loader_info_find_type(loader_info_list,  app_type, __is_hw_acc(hwacc));
+	if (loader_name)
+		type = _loader_info_find_type_by_loader_name(loader_info_list, loader_name);
+	else
+		type = _loader_info_find_type(loader_info_list,  app_type, __is_hw_acc(hwacc));
 	cpc = __find_slot(type, PAD_LOADER_ID_STATIC);
 	if (!cpc)
 		return NULL;
@@ -1043,12 +1046,11 @@ static gboolean __handle_launch_event(gpointer data)
 	SECURE_LOGD("app_type : %s\n", menu_info->app_type);
 	SECURE_LOGD("pkg_type : %s\n", menu_info->pkg_type);
 
-
 	if (menu_info->comp_type &&
-				strcmp(menu_info->comp_type, "svcapp") == 0) {
+			strcmp(menu_info->comp_type, "svcapp") == 0) {
 		loader_id = PAD_LOADER_ID_DIRECT;
 	} else if ((loader_id = __get_loader_id(kb)) <= PAD_LOADER_ID_STATIC) {
-		cpc = __find_available_slot(menu_info->hwacc, menu_info->app_type);
+		cpc = __find_available_slot(menu_info->hwacc, menu_info->app_type, menu_info->loader_name);
 	} else {
 		type = LAUNCHPAD_TYPE_DYNAMIC;
 		cpc = __find_slot(type, loader_id);
