@@ -35,7 +35,7 @@
 #define LOADER_TYPE_COMMON	"common-loader"
 #define LOADER_TYPE_HW		"hw-loader"
 #define LOADER_TYPE_SW		"sw-loader"
-
+#define LOADER_TYPE_COMPACT	"compact-loader"
 
 extern bundle *launchpad_loader_get_bundle();
 
@@ -54,13 +54,15 @@ enum loader_type {
 	TYPE_COMMON,
 	TYPE_SW,
 	TYPE_HW,
-	MAX_LOADER_TYPE
+	TYPE_COMPACT,
+	TYPE_MAX
 };
 
-enum acc_type {
-	SW_ACC,
-	HW_ACC,
-	MAX_ACC_TYPE
+enum init_type {
+	INIT_ELM_AND_SW_WIN,
+	INIT_ELM_AND_HW_WIN,
+	INIT_NONE,
+	INIT_MAX
 };
 
 typedef void (*loader_convertible)(void);
@@ -187,27 +189,36 @@ static void __loader_create_cb(bundle *extra, int type, void *user_data)
 		__type = TYPE_SW;
 	else if (!strcmp(LOADER_TYPE_HW, ltype))
 		__type = TYPE_HW;
+	else if (!strcmp(LOADER_TYPE_COMPACT, ltype))
+		__type = TYPE_COMPACT;
 
 	_D("Loader type:%d", __type);
 
 	__preload_lib(extra);
 
-	elm_init_cnt = elm_init(__argc, __argv);
-	_D("[candidate] elm init, returned: %d", elm_init_cnt);
-
 	switch (__type) {
 	case TYPE_SW:
+		elm_init_cnt = elm_init(__argc, __argv);
+		_D("[candidate] elm init, returned: %d", elm_init_cnt);
 		elm_config_accel_preference_set("none");
 		__init_window();
 		break;
 
 	case TYPE_HW:
+		elm_init_cnt = elm_init(__argc, __argv);
+		_D("[candidate] elm init, returned: %d", elm_init_cnt);
 		elm_config_accel_preference_set("hw");
 		__init_window();
 		break;
 
-	default:
+	case TYPE_COMMON:
+		elm_init_cnt = elm_init(__argc, __argv);
+		_D("[candidate] elm init, returned: %d", elm_init_cnt);
 		__init_theme();
+		break;
+
+	default:
+		ecore_init();
 		break;
 	}
 
@@ -225,13 +236,30 @@ static void __loader_create_cb(bundle *extra, int type, void *user_data)
 	}
 }
 
-static loader_convertible __converter_table[MAX_LOADER_TYPE][MAX_ACC_TYPE] = {
-	[TYPE_COMMON][SW_ACC] = NULL,
-	[TYPE_COMMON][HW_ACC] = NULL,
-	[TYPE_SW][SW_ACC] = NULL,
-	[TYPE_SW][HW_ACC] = __fini_window,
-	[TYPE_HW][SW_ACC] = __fini_window,
-	[TYPE_HW][HW_ACC] = NULL,
+static void __fini_elm_and_window(void)
+{
+	__fini_window();
+	elm_shutdown();
+}
+
+static void __fini_elm(void)
+{
+	elm_shutdown();
+}
+
+static loader_convertible __converter_table[TYPE_MAX][INIT_MAX] = {
+	[TYPE_COMMON][INIT_ELM_AND_SW_WIN] = NULL,
+	[TYPE_COMMON][INIT_ELM_AND_HW_WIN] = NULL,
+	[TYPE_COMMON][INIT_NONE] = __fini_elm,
+	[TYPE_SW][INIT_ELM_AND_SW_WIN] = NULL,
+	[TYPE_SW][INIT_ELM_AND_HW_WIN] = __fini_window,
+	[TYPE_SW][INIT_NONE] =__fini_elm_and_window,
+	[TYPE_HW][INIT_ELM_AND_SW_WIN] = __fini_window,
+	[TYPE_HW][INIT_ELM_AND_HW_WIN] = NULL,
+	[TYPE_HW][INIT_NONE] = __fini_elm_and_window,
+	[TYPE_COMPACT][INIT_ELM_AND_SW_WIN] = NULL,
+	[TYPE_COMPACT][INIT_ELM_AND_HW_WIN] = NULL,
+	[TYPE_COMPACT][INIT_NONE] = NULL,
 };
 
 static int __loader_launch_cb(int argc, char **argv, const char *app_path,
@@ -239,14 +267,16 @@ static int __loader_launch_cb(int argc, char **argv, const char *app_path,
 		void *user_data)
 {
 	const char *hwacc;
+	const char *comp_type;
 	bundle *kb = launchpad_loader_get_bundle();
-	int acc = SW_ACC;
+	int init = INIT_ELM_AND_SW_WIN;
 
 	vconf_ignore_key_changed(VCONFKEY_SETAPPL_APP_HW_ACCELERATION, __vconf_cb);
 	if (kb == NULL)
 		return 0;
 
 	hwacc = bundle_get_val(kb, AUL_K_HWACC);
+	comp_type = bundle_get_val(kb, AUL_K_COMP_TYPE);
 
 	if (!hwacc)
 		return 0;
@@ -254,10 +284,14 @@ static int __loader_launch_cb(int argc, char **argv, const char *app_path,
 	if (strcmp(hwacc, "USE") == 0 ||
 		(strcmp(hwacc, "SYS") == 0 &&
 			__sys_hwacc == SETTING_HW_ACCELERATION_ON)) {
-		acc = HW_ACC;
+		init = INIT_ELM_AND_HW_WIN;
 	}
 
-	loader_convertible convert = __converter_table[__type][acc];
+	if (comp_type && (strcmp(comp_type, "widgetapp") == 0 ||
+			strcmp(comp_type, "watchapp") == 0))
+		init = INIT_NONE;
+
+	loader_convertible convert = __converter_table[__type][init];
 	if (convert)
 		convert();
 
