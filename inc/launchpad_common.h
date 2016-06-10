@@ -95,6 +95,7 @@ typedef struct {
 	char *comp_type;
 	char *internal_pool;
 	char *root_path;
+	char *loader_name;
 } appinfo_t;
 
 char *_proc_get_cmdline_bypid(int pid);
