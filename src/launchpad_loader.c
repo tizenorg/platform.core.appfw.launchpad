@@ -60,6 +60,7 @@ enum loader_type {
 enum acc_type {
 	SW_ACC,
 	HW_ACC,
+	NO_INIT,
 	MAX_ACC_TYPE
 };
 
@@ -225,13 +226,28 @@ static void __loader_create_cb(bundle *extra, int type, void *user_data)
 	}
 }
 
+static void __fini_elm_and_window(void)
+{
+	__fini_window();
+	elm_shutdown();
+}
+
+static void __fini_elm(void)
+{
+	elm_shutdown();
+}
+
 static loader_convertible __converter_table[MAX_LOADER_TYPE][MAX_ACC_TYPE] = {
 	[TYPE_COMMON][SW_ACC] = NULL,
 	[TYPE_COMMON][HW_ACC] = NULL,
+	[TYPE_COMMON][NO_INIT] = __fini_elm,
 	[TYPE_SW][SW_ACC] = NULL,
 	[TYPE_SW][HW_ACC] = __fini_window,
+	[TYPE_SW][NO_INIT] =__fini_elm_and_window,
 	[TYPE_HW][SW_ACC] = __fini_window,
 	[TYPE_HW][HW_ACC] = NULL,
+	[TYPE_HW][NO_INIT] = __fini_elm_and_window,
+
 };
 
 static int __loader_launch_cb(int argc, char **argv, const char *app_path,
@@ -239,6 +255,7 @@ static int __loader_launch_cb(int argc, char **argv, const char *app_path,
 		void *user_data)
 {
 	const char *hwacc;
+	const char *comp_type;
 	bundle *kb = launchpad_loader_get_bundle();
 	int acc = SW_ACC;
 
@@ -247,6 +264,7 @@ static int __loader_launch_cb(int argc, char **argv, const char *app_path,
 		return 0;
 
 	hwacc = bundle_get_val(kb, AUL_K_HWACC);
+	comp_type = bundle_get_val(kb, AUL_K_COMP_TYPE);
 
 	if (!hwacc)
 		return 0;
@@ -256,6 +274,10 @@ static int __loader_launch_cb(int argc, char **argv, const char *app_path,
 			__sys_hwacc == SETTING_HW_ACCELERATION_ON)) {
 		acc = HW_ACC;
 	}
+
+	if (comp_type && (strcmp(comp_type, "widgetapp") == 0 ||
+			strcmp(comp_type, "watchapp") == 0))
+		acc = NO_INIT;
 
 	loader_convertible convert = __converter_table[__type][acc];
 	if (convert)
