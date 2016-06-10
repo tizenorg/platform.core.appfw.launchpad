@@ -54,13 +54,14 @@ enum loader_type {
 	TYPE_COMMON,
 	TYPE_SW,
 	TYPE_HW,
-	MAX_LOADER_TYPE
+	TYPE_MAX
 };
 
-enum acc_type {
-	SW_ACC,
-	HW_ACC,
-	MAX_ACC_TYPE
+enum init_type {
+	INIT_ELM_AND_SW_WIN,
+	INIT_ELM_AND_HW_WIN,
+	INIT_NONE,
+	INIT_MAX
 };
 
 typedef void (*loader_convertible)(void);
@@ -225,13 +226,27 @@ static void __loader_create_cb(bundle *extra, int type, void *user_data)
 	}
 }
 
-static loader_convertible __converter_table[MAX_LOADER_TYPE][MAX_ACC_TYPE] = {
-	[TYPE_COMMON][SW_ACC] = NULL,
-	[TYPE_COMMON][HW_ACC] = NULL,
-	[TYPE_SW][SW_ACC] = NULL,
-	[TYPE_SW][HW_ACC] = __fini_window,
-	[TYPE_HW][SW_ACC] = __fini_window,
-	[TYPE_HW][HW_ACC] = NULL,
+static void __fini_elm_and_window(void)
+{
+	__fini_window();
+	elm_shutdown();
+}
+
+static void __fini_elm(void)
+{
+	elm_shutdown();
+}
+
+static loader_convertible __converter_table[TYPE_MAX][INIT_MAX] = {
+	[TYPE_COMMON][INIT_ELM_AND_SW_WIN] = NULL,
+	[TYPE_COMMON][INIT_ELM_AND_HW_WIN] = NULL,
+	[TYPE_COMMON][INIT_NONE] = __fini_elm,
+	[TYPE_SW][INIT_ELM_AND_SW_WIN] = NULL,
+	[TYPE_SW][INIT_ELM_AND_HW_WIN] = __fini_window,
+	[TYPE_SW][INIT_NONE] =__fini_elm_and_window,
+	[TYPE_HW][INIT_ELM_AND_SW_WIN] = __fini_window,
+	[TYPE_HW][INIT_ELM_AND_HW_WIN] = NULL,
+	[TYPE_HW][INIT_NONE] = __fini_elm_and_window,
 };
 
 static int __loader_launch_cb(int argc, char **argv, const char *app_path,
@@ -239,14 +254,16 @@ static int __loader_launch_cb(int argc, char **argv, const char *app_path,
 		void *user_data)
 {
 	const char *hwacc;
+	const char *comp_type;
 	bundle *kb = launchpad_loader_get_bundle();
-	int acc = SW_ACC;
+	int init = INIT_ELM_AND_SW_WIN;
 
 	vconf_ignore_key_changed(VCONFKEY_SETAPPL_APP_HW_ACCELERATION, __vconf_cb);
 	if (kb == NULL)
 		return 0;
 
 	hwacc = bundle_get_val(kb, AUL_K_HWACC);
+	comp_type = bundle_get_val(kb, AUL_K_COMP_TYPE);
 
 	if (!hwacc)
 		return 0;
@@ -254,10 +271,14 @@ static int __loader_launch_cb(int argc, char **argv, const char *app_path,
 	if (strcmp(hwacc, "USE") == 0 ||
 		(strcmp(hwacc, "SYS") == 0 &&
 			__sys_hwacc == SETTING_HW_ACCELERATION_ON)) {
-		acc = HW_ACC;
+		init = INIT_ELM_AND_HW_WIN;
 	}
 
-	loader_convertible convert = __converter_table[__type][acc];
+	if (comp_type && (strcmp(comp_type, "widgetapp") == 0 ||
+			strcmp(comp_type, "watchapp") == 0))
+		init = INIT_NONE;
+
+	loader_convertible convert = __converter_table[__type][init];
 	if (convert)
 		convert();
 

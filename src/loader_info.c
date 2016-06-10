@@ -304,6 +304,21 @@ static int __comp_app_type_with_sw_acc(gconstpointer a, gconstpointer b)
 	return -1;
 }
 
+static int __comp_app_type(gconstpointer a, gconstpointer b)
+{
+	loader_info_t *info = (loader_info_t *)a;
+
+	if (info == NULL || info->app_types == NULL || b == NULL)
+		return -1;
+
+	if (g_list_find_custom(info->app_types, b, __comp_str) &&
+		info->hw_acc == NULL)
+		return 0;
+
+	return -1;
+}
+
+
 static int __comp_name(gconstpointer a, gconstpointer b)
 {
 	loader_info_t *info = (loader_info_t *)a;
@@ -314,12 +329,13 @@ static int __comp_name(gconstpointer a, gconstpointer b)
 	return strcmp(info->name, b);
 }
 
-int _loader_info_find_type(GList *info,  const char *app_type, bool hwacc)
+int _loader_info_find_type(GList *info,  const char *app_type, bool hwacc, bool is_widget)
 {
 	GList *cur = NULL;
 
-
-	if (hwacc)
+	if (is_widget)
+		cur = g_list_find_custom(info, app_type, __comp_app_type);
+	else if (hwacc)
 		cur = g_list_find_custom(info, app_type, __comp_app_type_with_hw_acc);
 	else
 		cur = g_list_find_custom(info, app_type, __comp_app_type_with_sw_acc);

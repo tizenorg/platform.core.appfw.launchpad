@@ -912,7 +912,7 @@ static bool __is_hw_acc(const char *hwacc)
 }
 
 static candidate_process_context_t *__find_available_slot(const char *hwacc,
-		const char *app_type)
+		const char *app_type, bool is_widget)
 {
 	int type;
 	candidate_process_context_t *cpc;
@@ -920,7 +920,7 @@ static candidate_process_context_t *__find_available_slot(const char *hwacc,
 	int len = 0;
 	int i;
 
-	type = _loader_info_find_type(loader_info_list,  app_type, __is_hw_acc(hwacc));
+	type = _loader_info_find_type(loader_info_list,  app_type, __is_hw_acc(hwacc), is_widget);
 	cpc = __find_slot(type, PAD_LOADER_ID_STATIC);
 	if (!cpc)
 		return NULL;
@@ -944,6 +944,15 @@ static candidate_process_context_t *__find_available_slot(const char *hwacc,
 
 	free(a_types);
 	return NULL;
+}
+
+static bool __is_widget(const char *comp_type)
+{
+	if (comp_type && (strcmp(comp_type, "widgetapp") == 0 ||
+			strcmp(comp_type, "watchapp") == 0))
+		return true;
+
+	return false;
 }
 
 static gboolean __handle_launch_event(gpointer data)
@@ -1043,12 +1052,12 @@ static gboolean __handle_launch_event(gpointer data)
 	SECURE_LOGD("app_type : %s\n", menu_info->app_type);
 	SECURE_LOGD("pkg_type : %s\n", menu_info->pkg_type);
 
-
 	if (menu_info->comp_type &&
-				strcmp(menu_info->comp_type, "svcapp") == 0) {
+			strcmp(menu_info->comp_type, "svcapp") == 0) {
 		loader_id = PAD_LOADER_ID_DIRECT;
 	} else if ((loader_id = __get_loader_id(kb)) <= PAD_LOADER_ID_STATIC) {
-		cpc = __find_available_slot(menu_info->hwacc, menu_info->app_type);
+		cpc = __find_available_slot(menu_info->hwacc, menu_info->app_type,
+				__is_widget(menu_info->comp_type));
 	} else {
 		type = LAUNCHPAD_TYPE_DYNAMIC;
 		cpc = __find_slot(type, loader_id);
