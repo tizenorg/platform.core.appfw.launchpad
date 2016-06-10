@@ -415,6 +415,10 @@ appinfo_t *_appinfo_create(bundle *kb)
 	if (ptr)
 		menu_info->root_path = strdup(ptr);
 
+	ptr = bundle_get_val(kb, AUL_K_LOADER_NAME);
+	if (ptr)
+		menu_info->loader_name = strdup(ptr);
+
 	if (!_appinfo_get_app_path(menu_info)) {
 		_appinfo_free(menu_info);
 		return NULL;
@@ -483,6 +487,8 @@ void _appinfo_free(appinfo_t *menu_info)
 		free(menu_info->internal_pool);
 	if (menu_info->root_path != NULL)
 		free(menu_info->root_path);
+	if (menu_info->loader_name != NULL)
+		free(menu_info->loader_name);
 
 	free(menu_info);
 }
@@ -501,7 +507,6 @@ void _modify_bundle(bundle *kb, int caller_pid, appinfo_t *menu_info, int cmd)
 	bundle_del(kb, AUL_K_PACKAGETYPE);
 	bundle_del(kb, AUL_K_TASKMANAGE);
 	bundle_del(kb, AUL_K_PKGID);
-	bundle_del(kb, AUL_K_COMP_TYPE);
 
 	/* Parse app_path to retrieve default bundle*/
 	if (cmd == PAD_CMD_LAUNCH) {

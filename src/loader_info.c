@@ -318,12 +318,24 @@ int _loader_info_find_type(GList *info,  const char *app_type, bool hwacc)
 {
 	GList *cur = NULL;
 
-
 	if (hwacc)
 		cur = g_list_find_custom(info, app_type, __comp_app_type_with_hw_acc);
 	else
 		cur = g_list_find_custom(info, app_type, __comp_app_type_with_sw_acc);
 
+	if (cur == NULL)
+		return -1;
+
+	loader_info_t *cur_info = (loader_info_t *)cur->data;
+
+	return cur_info->type;
+}
+
+int _loader_info_find_type_by_loader_name(GList *info,  const char *loader_name)
+{
+	GList *cur = NULL;
+
+	cur = g_list_find_custom(info, loader_name, __comp_name);
 	if (cur == NULL)
 		return -1;
 
