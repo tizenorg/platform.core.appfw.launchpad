@@ -63,7 +63,7 @@ static void __parse_detection_method(loader_info_t *info, char *line)
 {
 	char *token;
 	char *savedptr;
-	char refined_tok[MAX_LOCAL_BUFSZ];
+	char refined_tok[LINE_MAX];
 
 	token = strtok_r(line, "|", &savedptr);
 	info->detection_method = 0;
@@ -86,7 +86,7 @@ static void __parse_app_types(loader_info_t *info, char *line)
 {
 	char *token;
 	char *savedptr;
-	char refined_tok[MAX_LOCAL_BUFSZ];
+	char refined_tok[LINE_MAX];
 
 	token = strtok_r(line, "|", &savedptr);
 	while (token) {
@@ -100,9 +100,9 @@ static void __parse_app_types(loader_info_t *info, char *line)
 
 static void __parse_extra(loader_info_t *info, char *line)
 {
-	char tok1[MAX_LOCAL_BUFSZ] = { 0, };
-	char tok2[MAX_LOCAL_BUFSZ] = { 0, };
-	char tok3[MAX_LOCAL_BUFSZ] = { 0, };
+	char tok1[LINE_MAX] = { 0, };
+	char tok2[LINE_MAX] = { 0, };
+	char tok3[LINE_MAX] = { 0, };
 
 	if (info->extra == NULL)
 		return;
@@ -151,26 +151,26 @@ static void __flush_extra_array(bundle *b, char *key, GList *list)
 static GList *__parse_file(GList *list, const char *path)
 {
 	FILE *fp;
-	char buf[MAX_LOCAL_BUFSZ];
-	char tok1[MAX_LOCAL_BUFSZ];
-	char tok2[MAX_LOCAL_BUFSZ];
+	char buf[LINE_MAX];
+	char tok1[LINE_MAX];
+	char tok2[LINE_MAX];
 	loader_info_t *cur_info = NULL;
 	char *key = NULL;
 	GList *extra_array = NULL;
 
 	fp = fopen(path, "rt");
-
 	if (fp == NULL)
 		return list;
 
-	while (fgets(buf, MAX_LOCAL_BUFSZ, fp) != NULL) {
+	while (fgets(buf, sizeof(buf), fp) != NULL) {
 		tok1[0] = '\0';
 		tok2[0] = '\0';
 		sscanf(buf, "%s %s", tok1, tok2);
 
-		if (strcasecmp(TAG_LOADER,  tok1) == 0) {
+		if (strcasecmp(TAG_LOADER, tok1) == 0) {
 			if (cur_info != NULL) {
-				__flush_extra_array(cur_info->extra, key, extra_array);
+				__flush_extra_array(cur_info->extra, key,
+						extra_array);
 				extra_array = NULL;
 				key = NULL;
 				list = g_list_append(list, cur_info);
@@ -182,7 +182,7 @@ static GList *__parse_file(GList *list, const char *path)
 		if (tok1[0] == '\0' || tok2[0] == '\0' || tok1[0] == '#')
 			continue;
 
-		if (strcasecmp(TAG_NAME,  tok1) == 0) {
+		if (strcasecmp(TAG_NAME, tok1) == 0) {
 			cur_info->name = strdup(tok2);
 		} else if (strcasecmp(TAG_EXE, tok1) == 0) {
 			cur_info->exe = strdup(tok2);
@@ -190,11 +190,11 @@ static GList *__parse_file(GList *list, const char *path)
 			__parse_app_types(cur_info, &buf[strlen(tok1)]);
 		} else if (strcasecmp(TAG_DETECTION_METHOD, tok1) == 0) {
 			__parse_detection_method(cur_info, &buf[strlen(tok1)]);
-		} else if (strcasecmp(TAG_TIMEOUT,  tok1) == 0) {
+		} else if (strcasecmp(TAG_TIMEOUT, tok1) == 0) {
 			cur_info->timeout_val = atoi(tok2);
-		} else if (strcasecmp(TAG_EXTRA,  tok1) == 0) {
+		} else if (strcasecmp(TAG_EXTRA, tok1) == 0) {
 			__parse_extra(cur_info, buf);
-		} else if (strcasecmp(TAG_EXTRA_ARRAY, tok1) == 0) {
+		} else if (strcasecmp(TAG_EXTRA_ARRAY,tok1) == 0) {
 			__flush_extra_array(cur_info->extra, key, extra_array);
 			extra_array = NULL;
 			key = strdup(tok2);
@@ -203,7 +203,9 @@ static GList *__parse_file(GList *list, const char *path)
 		} else if (strcasecmp(TAG_HW_ACC, tok1) == 0) {
 			cur_info->hw_acc = strdup(tok2);
 		} else if (strcasecmp(TAG_ALTERNATIVE_LOADER, tok1) == 0) {
-			cur_info->alternative_loaders = g_list_append(cur_info->alternative_loaders, strdup(tok2));
+			cur_info->alternative_loaders =
+				g_list_append(cur_info->alternative_loaders,
+						strdup(tok2));
 		}
 	}
 
@@ -223,7 +225,7 @@ GList *_loader_info_load(const char *path)
 	struct dirent entry;
 	struct dirent *result = NULL;
 	GList *list = NULL;
-	char buf[MAX_LOCAL_BUFSZ];
+	char buf[PATH_MAX];
 	char *ext;
 
 	dir_info = opendir(path);
