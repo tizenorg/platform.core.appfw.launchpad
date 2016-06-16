@@ -77,6 +77,8 @@ static int __sys_hwacc;
 static GList *loader_info_list;
 static int user_slot_offset;
 static GList *candidate_slot_list;
+static app_labels_monitor *label_monitor;
+
 static candidate_process_context_t *__add_slot(int type, int loader_id,
 		int caller_pid, const char *loader_path, const char *extra,
 		int detection_method, int timeout_val);
@@ -279,11 +281,6 @@ error:
 		close(fd);
 
 	return -1;
-}
-
-static int __set_access(const char *appid)
-{
-	return security_manager_prepare_app(appid);
 }
 
 static int __get_loader_id(bundle *kb)
@@ -507,8 +504,8 @@ static int __prepare_exec(const char *appid, const char *app_path,
 	/* SET PRIVILEGES*/
 	if (bundle_get_val(kb, AUL_K_PRIVACY_APPID) == NULL) {
 		_D("appId: %s / app_path : %s ", appid, app_path);
-		ret = __set_access(appid);
-		if (ret != 0) {
+		ret = security_manager_prepare_app(appid);
+		if (ret != SECURITY_MANAGER_SUCCESS) {
 			_D("fail to set privileges - check "
 					"your package's credential : %d\n",
 					ret);
@@ -819,6 +816,42 @@ static gboolean __handle_sigchild(gpointer data)
 			cpc = __find_slot_from_caller_pid(siginfo.ssi_pid);
 		}
 	} while (s > 0);
+
+	return G_SOURCE_CONTINUE;
+}
+
+static gboolean __handle_label_monitor(gpointer data)
+{
+	candidate_process_context_t *cpc;
+	GList *iter = candidate_slot_list;
+
+	_D("__handle_label_monitor()");
+	security_manager_app_labels_monitor_process(label_monitor);
+
+	while (iter) {
+		cpc = (candidate_process_context_t *)iter->data;
+		if (cpc->prepared) {
+			_D("Dispose candidate process %d", cpc->pid);
+			__kill_process(cpc->pid);
+			close(cpc->send_fd);
+			cpc->prepared = false;
+			cpc->pid = CANDIDATE_NONE;
+			cpc->send_fd = -1;
+			if (cpc->source > 0) {
+				g_source_remove(cpc->source);
+				cpc->source = 0;
+			}
+
+			if (cpc->timer > 0) {
+				g_source_remove(cpc->timer);
+				cpc->timer = 0;
+			}
+			__set_timer(cpc);
+			__prepare_candidate_process(cpc->type, cpc->loader_id);
+		}
+
+		iter = g_list_next(iter);
+	}
 
 	return G_SOURCE_CONTINUE;
 }
@@ -1219,6 +1252,33 @@ static int __init_sigchild_fd(void)
 	return 0;
 }
 
+static int __init_label_monitor_fd(void)
+{
+	int fd = -1;
+	guint pollfd;
+
+	if (security_manager_app_labels_monitor_init(&label_monitor)
+			!= SECURITY_MANAGER_SUCCESS)
+		return -1;
+	if (security_manager_app_labels_monitor_process(label_monitor)
+			!= SECURITY_MANAGER_SUCCESS)
+		return -1;
+	security_manager_app_labels_monitor_get_fd(label_monitor, &fd);
+
+	if (fd < 0) {
+		_E("failed to get fd");
+		return -1;
+	}
+
+	pollfd = __poll_fd(fd, G_IO_IN, (GSourceFunc)__handle_label_monitor, 0, 0);
+	if (pollfd == 0) {
+		close(fd);
+		return -1;
+	}
+
+	return 0;
+}
+
 static void __add_slot_from_info(gpointer data, gpointer user_data)
 {
 	loader_info_t *info = (loader_info_t *)data;
@@ -1298,6 +1358,12 @@ static int __before_loop(int argc, char **argv)
 		return -1;
 	}
 
+	ret = __init_label_monitor_fd();
+	if (ret != 0) {
+		_E("__init_launchpad_fd() failed");
+		return -1;
+	}
+
 	ret = vconf_get_int(VCONFKEY_SETAPPL_APP_HW_ACCELERATION, &__sys_hwacc);
 	if (ret != VCONF_OK) {
 		_E("Failed to get vconf int: %s",
@@ -1348,6 +1414,9 @@ int main(int argc, char **argv)
 	__set_priority();
 #endif
 	g_main_loop_run(mainloop);
+
+	if (label_monitor)
+		security_manager_app_labels_monitor_finish(label_monitor);
 
 	return -1;
 }
