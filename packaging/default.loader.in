@@ -30,7 +30,6 @@ EXTRA_ARRAY_VAL		@LIB_INSTALL_DIR@/libappcore-efl.so.1
 EXTRA_ARRAY_VAL		@LIB_INSTALL_DIR@/libappcore-common.so.1
 EXTRA_ARRAY_VAL		@LIB_INSTALL_DIR@/libcapi-appfw-application.so.0
 EXTRA_ARRAY_VAL		@LIB_INSTALL_DIR@/ecore_imf/modules/wayland/v-1.16/libwltextinputmodule.so
-ALTERNATIVE_LOADER	hw-loader1
 
 
 
