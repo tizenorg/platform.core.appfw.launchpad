@@ -39,6 +39,7 @@ typedef struct _loader_info {
 GList *_loader_info_load(const char *path);
 void _loader_info_dispose(GList *info);
 int _loader_info_find_type(GList *info, const char *app_type, bool hwacc);
+int _loader_info_find_type_by_loader_name(GList *info, const char *loader_name);
 int *_loader_get_alternative_types(GList *info, int type, int *len);
 
 
