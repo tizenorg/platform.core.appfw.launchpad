@@ -77,6 +77,8 @@ static int __sys_hwacc;
 static GList *loader_info_list;
 static int user_slot_offset;
 static GList *candidate_slot_list;
+static app_labels_monitor *label_monitor;
+
 static candidate_process_context_t *__add_slot(int type, int loader_id,
 		int caller_pid, const char *loader_path, const char *extra,
 		int detection_method, int timeout_val);
@@ -823,6 +825,40 @@ static gboolean __handle_sigchild(gpointer data)
 	return G_SOURCE_CONTINUE;
 }
 
+static gboolean __handle_label_monitor(gpointer data)
+{
+	candidate_process_context_t *cpc;
+	GList *iter = candidate_slot_list;
+
+	security_manager_app_labels_monitor_process(label_monitor);
+
+	while (iter) {
+		cpc = (candidate_process_context_t *)iter->data;
+		if (cpc->prepared) {
+			__kill_process(cpc->pid);
+			close(cpc->send_fd);
+			cpc->prepared = false;
+			cpc->pid = CANDIDATE_NONE;
+			cpc->send_fd = -1;
+			if (cpc->source > 0) {
+				g_source_remove(cpc->source);
+				cpc->source = 0;
+			}
+
+			if (cpc->timer > 0) {
+				g_source_remove(cpc->timer);
+				cpc->timer = 0;
+			}
+			__set_timer(cpc);
+			__prepare_candidate_process(cpc->type, cpc->loader_id);
+		}
+
+		iter = g_list_next(iter);
+	}
+
+	return G_SOURCE_CONTINUE;
+}
+
 static int __dispatch_cmd_hint(bundle *kb, int detection_method)
 {
 	candidate_process_context_t *cpc;
@@ -1219,6 +1255,29 @@ static int __init_sigchild_fd(void)
 	return 0;
 }
 
+static int __init_label_monitor_fd(void)
+{
+	int fd = -1;
+	guint pollfd;
+
+	security_manager_app_labels_monitor_init(&label_monitor);
+	security_manager_app_labels_monitor_process(label_monitor);
+	security_manager_app_labels_monitor_get_fd(label_monitor, &fd);
+
+	if (fd < 0) {
+		_E("failed to get fd");
+		return -1;
+	}
+
+	pollfd = __poll_fd(fd, G_IO_IN, (GSourceFunc)__handle_label_monitor, 0, 0);
+	if (pollfd == 0) {
+		close(fd);
+		return -1;
+	}
+
+	return 0;
+}
+
 static void __add_slot_from_info(gpointer data, gpointer user_data)
 {
 	loader_info_t *info = (loader_info_t *)data;
@@ -1298,6 +1357,12 @@ static int __before_loop(int argc, char **argv)
 		return -1;
 	}
 
+	ret = __init_label_monitor_fd();
+	if (ret != 0) {
+		_E("__init_launchpad_fd() failed");
+		return -1;
+	}
+
 	ret = vconf_get_int(VCONFKEY_SETAPPL_APP_HW_ACCELERATION, &__sys_hwacc);
 	if (ret != VCONF_OK) {
 		_E("Failed to get vconf int: %s",
@@ -1348,6 +1413,9 @@ int main(int argc, char **argv)
 	__set_priority();
 #endif
 	g_main_loop_run(mainloop);
+
+	if (label_monitor)
+		security_manager_app_labels_monitor_finish(label_monitor);
 
 	return -1;
 }

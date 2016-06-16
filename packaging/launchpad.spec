@@ -83,7 +83,7 @@ cp %{_builddir}/%{name}-%{version}/LICENSE  %{buildroot}/usr/share/license/%{nam
 %{_unitdir_user}/sockets.target.wants/launchpad-process-pool.socket
 %{_unitdir_user}/default.target.wants/launchpad-process-pool.service
 %caps(cap_mac_admin,cap_mac_override,cap_setgid=ei) %{_bindir}/launchpad-process-pool
-%caps(cap_mac_admin,cap_mac_override,cap_setgid=ei) %{_bindir}/launchpad-loader
+%caps(cap_mac_override,cap_setgid=ei) %{_bindir}/launchpad-loader
 %attr(0644,root,root) %{_libdir}/liblaunchpad.so.*
 
 %files devel
