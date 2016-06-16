@@ -71,12 +71,6 @@ static void __release_at_exit(void)
 		free(__root_path);
 }
 
-static int __set_access(const char *appid, const char *pkg_type,
-		const char *app_path)
-{
-	return security_manager_prepare_app(appid);
-}
-
 static int __prepare_exec(const char *appid, const char *app_path,
 			const char *pkg_type, int type)
 {
@@ -89,8 +83,8 @@ static int __prepare_exec(const char *appid, const char *app_path,
 	/* SET PRIVILEGES*/
 	SECURE_LOGD("[candidata] appid : %s / pkg_type : %s / app_path : %s",
 		appid, pkg_type, app_path);
-	ret = __set_access(appid, pkg_type, app_path);
-	if (ret < 0) {
+	ret = security_manager_prepare_app(appid);
+	if (ret != SECURITY_MANAGER_SUCCESS) {
 		_D("fail to set privileges - check your package's credential: "
 				"%d\n", ret);
 		return -1;
