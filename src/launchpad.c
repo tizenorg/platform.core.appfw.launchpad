@@ -831,12 +831,6 @@ static gboolean __handle_label_monitor(gpointer data)
 	while (iter) {
 		cpc = (candidate_process_context_t *)iter->data;
 		if (cpc->prepared) {
-			_D("Dispose candidate process %d", cpc->pid);
-			__kill_process(cpc->pid);
-			close(cpc->send_fd);
-			cpc->prepared = false;
-			cpc->pid = CANDIDATE_NONE;
-			cpc->send_fd = -1;
 			if (cpc->source > 0) {
 				g_source_remove(cpc->source);
 				cpc->source = 0;
@@ -846,7 +840,13 @@ static gboolean __handle_label_monitor(gpointer data)
 				g_source_remove(cpc->timer);
 				cpc->timer = 0;
 			}
-			__set_timer(cpc);
+
+			_D("Dispose candidate process %d", cpc->pid);
+			__kill_process(cpc->pid);
+			close(cpc->send_fd);
+			cpc->prepared = false;
+			cpc->pid = CANDIDATE_NONE;
+			cpc->send_fd = -1;
 			__prepare_candidate_process(cpc->type, cpc->loader_id);
 		}
 
