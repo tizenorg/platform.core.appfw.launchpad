@@ -636,8 +636,15 @@ char *_get_libdir(const char *path)
 	char buf[PATH_MAX];
 	char *ptr;
 
+	if (path == NULL)
+		return NULL;
 	path_dup = strdup(path);
+	if (path_dup == NULL)
+		return NULL;
 	ptr = strrchr(path_dup, '/');
+	if (ptr == NULL)
+		return NULL;
+
 	*ptr = '\0';
 
 	snprintf(buf, sizeof(buf), "%s/../lib/", path_dup);
