@@ -411,12 +411,12 @@ static void __set_timer(candidate_process_context_t *cpc)
 static int __send_launchpad_loader(candidate_process_context_t *cpc,
 		app_pkt_t *pkt, const char *app_path, int clifd)
 {
-	char sock_path[PATH_MAX];
 	int pid = -1;
+	int ret;
 
-	snprintf(sock_path, sizeof(sock_path), "/run/aul/apps/%d/%d",
-			getuid(), cpc->pid);
-	unlink(sock_path);
+	ret = _delete_sock_path(cpc->pid, getuid());
+	if (ret != 0)
+		return -1;
 
 	__candidate_process_real_launch(cpc->send_fd, pkt);
 	SECURE_LOGD("Request to candidate process, pid: %d, bin path: %s",
@@ -543,7 +543,6 @@ static int __launch_directly(const char *appid, const char *app_path, int clifd,
 		bundle *kb, appinfo_t *menu_info,
 		candidate_process_context_t *cpc)
 {
-	char sock_path[PATH_MAX];
 	int pid = fork();
 	int max_fd;
 	int iter_fd;
@@ -559,9 +558,7 @@ static int __launch_directly(const char *appid, const char *app_path, int clifd,
 		for (iter_fd = 3; iter_fd <= max_fd; iter_fd++)
 			close(iter_fd);
 
-		snprintf(sock_path, sizeof(sock_path), "/run/aul/apps/%d/%d",
-				getuid(), getpid());
-		unlink(sock_path);
+		_delete_sock_path(getpid(), getuid());
 
 		PERF("prepare exec - first done");
 		_D("lock up test log(no error) : prepare exec - first done");

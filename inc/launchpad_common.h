@@ -110,6 +110,7 @@ void _set_env(appinfo_t *menu_info, bundle *kb);
 char **_create_argc_argv(bundle *kb, int *margc);
 char *_get_libdir(const char *path);
 void _prepare_listen_sock(void);
+int _delete_sock_path(int pid, uid_t uid);
 
 appinfo_t *_appinfo_create(bundle *kb);
 void _appinfo_free(appinfo_t *menu_info);

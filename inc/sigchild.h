@@ -20,6 +20,8 @@
 #include <dirent.h>
 #include <gio/gio.h>
 
+#include "launchpad_common.h"
+
 #define AUL_DBUS_PATH			"/aul/dbus_handler"
 #define AUL_DBUS_SIGNAL_INTERFACE	"org.tizen.aul.signal"
 #define AUL_DBUS_APPDEAD_SIGNAL		"app_dead"
@@ -45,9 +47,7 @@ static inline void __socket_garbage_collector(void)
 
 		snprintf(tmp, MAX_LOCAL_BUFSZ, "/proc/%s", dentry->d_name);
 		if (access(tmp, F_OK) < 0) {	/* Flawfinder: ignore */
-			snprintf(tmp, MAX_LOCAL_BUFSZ, "/run/aul/apps/%d/%s",
-					getuid(), dentry->d_name);
-			unlink(tmp);
+			_delete_sock_path(atoi(dentry->d_name), getuid());
 			continue;
 		}
 	}
@@ -138,16 +138,12 @@ static inline int __send_app_launch_signal_dbus(int launch_pid,
 
 static int __sigchild_action(pid_t dead_pid)
 {
-	char buf[MAX_LOCAL_BUFSZ];
-
 	if (dead_pid <= 0)
 		goto end;
 
 	__send_app_dead_signal_dbus(dead_pid);
 
-	snprintf(buf, sizeof(buf), "/run/aul/apps/%d/%d",
-			getuid(), dead_pid);
-	unlink(buf);
+	_delete_sock_path(dead_pid, getuid());
 
 	__socket_garbage_collector();
 end:

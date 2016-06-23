@@ -28,6 +28,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <linux/limits.h>
+#include <unistd.h>
 
 #include "launchpad_common.h"
 #include "key.h"
@@ -183,6 +184,7 @@ int _create_server_sock(const char *name)
 {
 	struct sockaddr_un saddr;
 	int fd;
+	int ret;
 
 	if (name)
 		fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
@@ -210,8 +212,28 @@ int _create_server_sock(const char *name)
 				"%s/daemons/%d/%s",
 				SOCKET_PATH, getuid(), name);
 	} else {
+		_delete_sock_path(getpid(), getuid());
 		snprintf(saddr.sun_path, sizeof(saddr.sun_path),
 				"%s/apps/%d/%d",
+				SOCKET_PATH, getuid(), getpid());
+		ret = mkdir(saddr.sun_path, 0700);
+		if (ret != 0) {
+			if (errno == EEXIST) {
+				if (access(saddr.sun_path, R_OK) != 0) {
+					_E("Failed to access %s directory - %d",
+							saddr.sun_path, errno);
+					close(fd);
+					return -1;
+				}
+			} else {
+				_E("Failed to create %s directory - %d",
+						saddr.sun_path, errno);
+				close(fd);
+				return -1;
+			}
+		}
+		snprintf(saddr.sun_path, sizeof(saddr.sun_path),
+				"%s/apps/%d/%d/.app-sock",
 				SOCKET_PATH, getuid(), getpid());
 	}
 	unlink(saddr.sun_path);
@@ -693,3 +715,21 @@ void _prepare_listen_sock(void)
 	setenv("AUL_LISTEN_SOCK", buf, 1);
 }
 
+int _delete_sock_path(int pid, uid_t uid)
+{
+	char path[PATH_MAX];
+
+	snprintf(path, sizeof(path), "/run/aul/apps/%d/%d/.app-sock",
+			uid, pid);
+	unlink(path);
+
+	snprintf(path, sizeof(path), "/run/aul/apps/%d/%d", uid, pid);
+	if (access(path, F_OK) == 0) {
+		if (rmdir(path) != 0) {
+			_E("Failed to delete %s directory - %d", path, errno);
+			return -1;
+		}
+	}
+
+	return 0;
+}
