@@ -29,8 +29,6 @@
 #include <sys/un.h>
 #include <linux/limits.h>
 #include <unistd.h>
-#include <glib.h>
-#include <glib/gstdio.h>
 
 #include "launchpad_common.h"
 #include "key.h"
