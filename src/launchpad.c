@@ -880,6 +880,21 @@ static int __dispatch_cmd_hint(bundle *kb, int detection_method)
 	return 0;
 }
 
+static int __dispatch_cmd_get_pgid(bundle *kb)
+{
+	int pid;
+	int pgid = -1;
+	const char *str;
+
+	str = bundle_get_val(kb, AUL_K_PID);
+	if (str) {
+		pid = atoi(str);
+		pgid = getpgid(pid);
+	}
+
+	return pgid;
+}
+
 static int __dispatch_cmd_add_loader(bundle *kb)
 {
 	const char *add_slot_str = NULL;
@@ -1044,6 +1059,11 @@ static gboolean __handle_launch_event(gpointer data)
 		goto end;
 	case PAD_CMD_DEMAND:
 		ret = __dispatch_cmd_hint(kb, METHOD_DEMAND);
+		__real_send(clifd, ret);
+		clifd = -1;
+		goto end;
+	case PAD_CMD_GET_PRGRP:
+		ret = __dispatch_cmd_get_pgid(kb);
 		__real_send(clifd, ret);
 		clifd = -1;
 		goto end;
