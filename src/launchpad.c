@@ -1257,17 +1257,23 @@ static int __init_sigchild_fd(void)
 
 static int __init_label_monitor_fd(void)
 {
+	int ret;
 	int fd = -1;
 	guint pollfd;
 
-	if (security_manager_app_labels_monitor_init(&label_monitor)
-			!= SECURITY_MANAGER_SUCCESS)
+	ret = security_manager_app_labels_monitor_init(&label_monitor);
+	if (ret != SECURITY_MANAGER_SUCCESS) {
+		_E("security_manager_app_labels_monitor_init() failed");
 		return -1;
-	if (security_manager_app_labels_monitor_process(label_monitor)
-			!= SECURITY_MANAGER_SUCCESS)
-		return -1;
-	security_manager_app_labels_monitor_get_fd(label_monitor, &fd);
+	}
 
+	ret = security_manager_app_labels_monitor_process(label_monitor);
+	if (ret != SECURITY_MANAGER_SUCCESS) {
+		_E("security_manager_app_labels_monitor_process() failed");
+		return -1;
+	}
+
+	security_manager_app_labels_monitor_get_fd(label_monitor, &fd);
 	if (fd < 0) {
 		_E("failed to get fd");
 		return -1;
@@ -1363,7 +1369,7 @@ static int __before_loop(int argc, char **argv)
 
 	ret = __init_label_monitor_fd();
 	if (ret != 0) {
-		_E("__init_launchpad_fd() failed");
+		_E("__init_label_monitor_fd() failed");
 		return -1;
 	}
 
