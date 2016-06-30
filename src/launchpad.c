@@ -78,6 +78,9 @@ static GList *loader_info_list;
 static int user_slot_offset;
 static GList *candidate_slot_list;
 static app_labels_monitor *label_monitor;
+static long long cpu_total_time;
+static long long cpu_idle_time;
+static guint idle_checker;
 
 static candidate_process_context_t *__add_slot(int type, int loader_id,
 		int caller_pid, const char *loader_path, const char *extra,
@@ -439,6 +442,7 @@ static int __send_launchpad_loader(candidate_process_context_t *cpc,
 	}
 
 	__set_timer(cpc);
+	_get_cpu_idle(&cpu_total_time, &cpu_idle_time);
 	return pid;
 }
 
@@ -857,10 +861,37 @@ static gboolean __handle_label_monitor(gpointer data)
 	return G_SOURCE_CONTINUE;
 }
 
+static gboolean __handle_idle_checker(gpointer data)
+{
+	long long total = 0;
+	long long idle = 0;
+	int per;
+	candidate_process_context_t *cpc = data;
+
+	_get_cpu_idle(&total, &idle);
+	if (total == cpu_total_time)
+		total++;
+
+	per = (idle - cpu_idle_time) * 100 / (total - cpu_total_time);
+	_D("CPU Idle : %d", per);
+
+	if (per >= 70) {
+		__prepare_candidate_process(cpc->type, cpc->loader_id);
+		return G_SOURCE_REMOVE;
+	}
+
+	cpu_idle_time = idle;
+	cpu_total_time = total;
+	return G_SOURCE_CONTINUE;
+}
+
 static int __dispatch_cmd_hint(bundle *kb, int detection_method)
 {
 	candidate_process_context_t *cpc;
 	GList *iter = candidate_slot_list;
+	long long total = 0;
+	long long idle = 0;
+	float per;
 
 	_W("cmd hint %d", detection_method);
 	while (iter) {
@@ -871,7 +902,25 @@ static int __dispatch_cmd_hint(bundle *kb, int detection_method)
 				g_source_remove(cpc->timer);
 				cpc->timer = 0;
 			}
-			__prepare_candidate_process(cpc->type, cpc->loader_id);
+
+			if (idle_checker > 0) {
+				g_source_remove(idle_checker);
+				idle_checker = 0;
+			}
+
+			_get_cpu_idle(&total, &idle);
+			if (total == cpu_total_time)
+				total++;
+			per = (idle - cpu_idle_time) * 100 / (total - cpu_total_time);
+			_D("Cpu Idle : %d", per);
+
+			if (per < 70) {
+				cpu_idle_time = idle;
+				cpu_total_time = total;
+				idle_checker = g_timeout_add(200, __handle_idle_checker, cpc);
+			} else {
+				__prepare_candidate_process(cpc->type, cpc->loader_id);
+			}
 		}
 
 		iter = g_list_next(iter);
