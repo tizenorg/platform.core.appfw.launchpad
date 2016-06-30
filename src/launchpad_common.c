@@ -29,6 +29,7 @@
 #include <sys/un.h>
 #include <linux/limits.h>
 #include <unistd.h>
+#include <stdio.h>
 
 #include "launchpad_common.h"
 #include "key.h"
@@ -73,6 +74,37 @@ static int __read_proc(const char *path, char *buf, int size)
 	close(fd);
 
 	return ret;
+}
+
+void _get_cpu_idle(long long *total, long long *idle)
+{
+	FILE *fp;
+	int i;
+	long long sum = 0;
+	long long val;
+	long long iv = 0;
+
+	char buf[32]= { 0, };
+
+	fp = fopen("/proc/stat", "rt");
+
+	if (fp == NULL)
+		return;
+
+	if (fscanf(fp, "%s", buf) == -1)
+		return;
+	for (i = 0; i < 10; i++){
+		if (fscanf(fp, "%lld", &val) == -1)
+			return;
+		sum += val;
+		if (i == 3) /* idle */
+			iv = val;
+	}
+
+	fclose(fp);
+
+	*total = sum;
+	*idle = iv;
 }
 
 void _set_sock_option(int fd, int cli)
