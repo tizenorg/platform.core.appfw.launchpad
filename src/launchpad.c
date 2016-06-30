@@ -65,6 +65,9 @@ typedef struct {
 	char *loader_extra;
 	int detection_method;
 	int timeout_val;
+	long long cpu_total_time;
+	long long cpu_idle_time;
+	guint idle_checker;
 } candidate_process_context_t;
 
 typedef struct {
@@ -357,6 +360,7 @@ static int __prepare_candidate_process(int type, int loader_id)
 	if (cpt == NULL)
 		return -1;
 
+	_D("prepare candidate process");
 	memset(argbuf, ' ', LOADER_ARG_LEN);
 	argbuf[LOADER_ARG_LEN - 1] = '\0';
 	argv[LOADER_ARG_DUMMY] = argbuf;
@@ -438,7 +442,13 @@ static int __send_launchpad_loader(candidate_process_context_t *cpc,
 		cpc->timer = 0;
 	}
 
+	if (cpc->idle_checker > 0) {
+		g_source_remove(cpc->idle_checker);
+		cpc->idle_checker = 0;
+	}
+
 	__set_timer(cpc);
+	_get_cpu_idle(&cpc->cpu_total_time, &cpc->cpu_idle_time);
 	return pid;
 }
 
@@ -742,6 +752,10 @@ static gboolean __handle_loader_client_event(gpointer data)
 		if (cpc->timer > 0)
 			g_source_remove(cpc->timer);
 		cpc->timer = 0;
+		if (cpc->idle_checker > 0)
+			g_source_remove(cpc->idle_checker);
+		cpc->idle_checker = 0;
+
 		__prepare_candidate_process(cpc->type, cpc->loader_id);
 
 		return G_SOURCE_REMOVE;
@@ -842,6 +856,11 @@ static gboolean __handle_label_monitor(gpointer data)
 				cpc->timer = 0;
 			}
 
+			if (cpc->idle_checker > 0) {
+				g_source_remove(cpc->idle_checker);
+				cpc->idle_checker = 0;
+			}
+
 			_D("Dispose candidate process %d", cpc->pid);
 			__kill_process(cpc->pid);
 			close(cpc->send_fd);
@@ -857,10 +876,38 @@ static gboolean __handle_label_monitor(gpointer data)
 	return G_SOURCE_CONTINUE;
 }
 
+static gboolean __handle_idle_checker(gpointer data)
+{
+	long long total = 0;
+	long long idle = 0;
+	int per;
+	candidate_process_context_t *cpc = data;
+
+	_get_cpu_idle(&total, &idle);
+	if (total == cpc->cpu_total_time)
+		total++;
+
+	per = (idle - cpc->cpu_idle_time) * 100 / (total - cpc->cpu_total_time);
+	_D("CPU Idle : %d %d", per, cpc->type);
+
+	if (per >= 70) {
+		__prepare_candidate_process(cpc->type, cpc->loader_id);
+		cpc->idle_checker = 0;
+		return G_SOURCE_REMOVE;
+	}
+
+	cpc->cpu_idle_time = idle;
+	cpc->cpu_total_time = total;
+	return G_SOURCE_CONTINUE;
+}
+
 static int __dispatch_cmd_hint(bundle *kb, int detection_method)
 {
 	candidate_process_context_t *cpc;
 	GList *iter = candidate_slot_list;
+	long long total = 0;
+	long long idle = 0;
+	int per;
 
 	_W("cmd hint %d", detection_method);
 	while (iter) {
@@ -871,7 +918,25 @@ static int __dispatch_cmd_hint(bundle *kb, int detection_method)
 				g_source_remove(cpc->timer);
 				cpc->timer = 0;
 			}
-			__prepare_candidate_process(cpc->type, cpc->loader_id);
+
+			if (cpc->idle_checker > 0) {
+				g_source_remove(cpc->idle_checker);
+				cpc->idle_checker = 0;
+			}
+
+			_get_cpu_idle(&total, &idle);
+			if (total == cpc->cpu_total_time)
+				total++;
+			per = (idle - cpc->cpu_idle_time) * 100 / (total - cpc->cpu_total_time);
+			_D("Cpu Idle : %d %d", per, cpc->type);
+
+			if (per < 70) {
+				cpc->cpu_idle_time = idle;
+				cpc->cpu_total_time = total;
+				cpc->idle_checker = g_timeout_add(200, __handle_idle_checker, cpc);
+			} else {
+				__prepare_candidate_process(cpc->type, cpc->loader_id);
+			}
 		}
 
 		iter = g_list_next(iter);
@@ -1159,6 +1224,9 @@ static candidate_process_context_t *__add_slot(int type, int loader_id,
 	cpc->loader_extra = loader_extra ? strdup(loader_extra) : strdup("");
 	cpc->detection_method = detection_method;
 	cpc->timeout_val = timeout_val;
+	cpc->cpu_total_time = 0;
+	cpc->cpu_idle_time = 0;
+	cpc->idle_checker = 0;
 
 	fd = __listen_candidate_process(cpc->type, cpc->loader_id);
 	if (fd == -1) {
@@ -1197,6 +1265,8 @@ static int __remove_slot(int type, int loader_id)
 				g_source_remove(cpc->timer);
 			if (cpc->source > 0)
 				g_source_remove(cpc->source);
+			if (cpc->idle_checker > 0)
+				g_source_remove(cpc->idle_checker);
 
 			candidate_slot_list = g_list_delete_link(
 					candidate_slot_list, iter);
