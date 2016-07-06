@@ -764,3 +764,44 @@ int _delete_sock_path(int pid, uid_t uid)
 	return 0;
 }
 
+int _close_all_fds(const int except)
+{
+	DIR *dp;
+	struct dirent dentry;
+	struct dirent *result = NULL;
+	int fd;
+	int max_fd;
+
+	dp = opendir("/proc/self/fd");
+	if (dp == NULL) {
+		/* fallback */
+		max_fd = sysconf(_SC_OPEN_MAX);
+		for (fd = 3; fd < max_fd; fd++) {
+			if (fd != except)
+				close(fd);
+		}
+
+		return 0;
+	}
+
+	while (readdir_r(dp, &dentry, &result) == 0 && result) {
+		if (!isdigit(dentry.d_name[0]))
+			continue;
+
+		fd = atoi(dentry.d_name);
+		if (fd < 3)
+			continue;
+
+		if (fd == dirfd(dp))
+			continue;
+
+		if (fd == except)
+			continue;
+
+		close(fd);
+	}
+	closedir(dp);
+
+	return 0;
+}
+

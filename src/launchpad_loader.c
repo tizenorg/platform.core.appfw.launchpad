@@ -266,8 +266,6 @@ static int __loader_launch_cb(int argc, char **argv, const char *app_path,
 
 static void __close_fds(void)
 {
-	int iter_fd;
-	int max_fd = sysconf(_SC_OPEN_MAX);
 	int fd = -1;
 	const char *sockfd;
 
@@ -275,10 +273,7 @@ static void __close_fds(void)
 	if (sockfd)
 		fd = atoi(sockfd);
 
-	for (iter_fd = 3; iter_fd <= max_fd; iter_fd++) {
-		if (iter_fd != fd)
-			close(iter_fd);
-	}
+	_close_all_fds(fd);
 }
 
 static int __loader_terminate_cb(int argc, char **argv, void *user_data)

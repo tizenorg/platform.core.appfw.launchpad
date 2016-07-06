@@ -544,8 +544,6 @@ static int __launch_directly(const char *appid, const char *app_path, int clifd,
 		candidate_process_context_t *cpc)
 {
 	int pid = fork();
-	int max_fd;
-	int iter_fd;
 
 	if (pid == 0) {
 		PERF("fork done");
@@ -554,10 +552,7 @@ static int __launch_directly(const char *appid, const char *app_path, int clifd,
 		__signal_unblock_sigchld();
 		__signal_fini();
 
-		max_fd = sysconf(_SC_OPEN_MAX);
-		for (iter_fd = 3; iter_fd <= max_fd; iter_fd++)
-			close(iter_fd);
-
+		_close_all_fds(0);
 		_delete_sock_path(getpid(), getuid());
 
 		PERF("prepare exec - first done");
