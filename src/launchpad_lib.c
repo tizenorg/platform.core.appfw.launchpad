@@ -47,9 +47,6 @@ static void *__loader_user_data;
 static int __argc;
 static char **__argv;
 static bundle *__bundle;
-static char *__appid;
-static char *__pkgid;
-static char *__root_path;
 static int __loader_type = LAUNCHPAD_TYPE_UNSUPPORTED;
 static int __loader_id;
 
@@ -57,18 +54,6 @@ static void __at_exit_to_release_bundle()
 {
 	if (__bundle)
 		bundle_free(__bundle);
-}
-
-static void __release_at_exit(void)
-{
-	if (__appid != NULL)
-		free(__appid);
-
-	if (__pkgid != NULL)
-		free(__pkgid);
-
-	if (__root_path != NULL)
-		free(__root_path);
 }
 
 static int __prepare_exec(const char *appid, const char *app_path,
@@ -174,7 +159,6 @@ static int __candidate_process_launchpad_main_loop(app_pkt_t *pkt,
 
 	__bundle = kb;
 	atexit(__at_exit_to_release_bundle);
-	atexit(__release_at_exit);
 
 	menu_info = _appinfo_create(kb);
 	if (menu_info == NULL) {
@@ -208,41 +192,22 @@ static int __candidate_process_launchpad_main_loop(app_pkt_t *pkt,
 	_modify_bundle(kb, /*cr.pid - unused parameter*/ 0, menu_info,
 			pkt->cmd);
 
-	__appid = strdup(menu_info->appid);
-	if (__appid == NULL) {
-		_E("Out of memory");
-		exit(-1);
-	}
-	aul_set_preinit_appid(__appid);
-
 	if (menu_info->pkgid == NULL) {
 		_E("unable to get pkg_id from menu_info");
 		exit(-1);
 	}
+
 	SECURE_LOGD("pkg id: %s", menu_info->pkgid);
-
-	__pkgid = strdup(menu_info->pkgid);
-	if (__pkgid == NULL) {
-		_E("Out of memory");
-		exit(-1);
-	}
-	aul_set_preinit_pkgid(__pkgid);
-
-	__root_path = strdup(menu_info->root_path);
-	if (__root_path == NULL) {
-		_E("Out of memory");
-		exit(-1);
-	}
-	aul_set_preinit_root_path(__root_path);
 
 	tmp_argv = _create_argc_argv(kb, &tmp_argc);
 
-	__default_launch_cb(kb, __appid, app_path, menu_info->pkg_type, type);
+	__default_launch_cb(kb, menu_info->appid, app_path,
+			menu_info->pkg_type, type);
 
 	if (__loader_callbacks->launch) {
 		ret = __loader_callbacks->launch(tmp_argc, tmp_argv, app_path,
-				__appid, __pkgid, menu_info->pkg_type,
-				__loader_user_data);
+				menu_info->appid, menu_info->pkgid,
+				menu_info->pkg_type, __loader_user_data);
 	}
 
 	/* SET ENVIROMENT*/
