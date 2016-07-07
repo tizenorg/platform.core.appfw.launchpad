@@ -637,6 +637,8 @@ void _set_env(appinfo_t *menu_info, bundle *kb)
 		setenv("TASKMANAGE", menu_info->taskmanage, 1);
 	if (menu_info->root_path != NULL)
 		setenv("AUL_ROOT_PATH", menu_info->root_path, 1);
+	if (menu_info->appid !=)
+		setenv("AUL_APPID", menu_info->appid, 1);
 
 	str = bundle_get_val(kb, AUL_K_WAYLAND_DISPLAY);
 	if (str != NULL)
