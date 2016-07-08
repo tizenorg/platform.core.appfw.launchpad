@@ -13,6 +13,7 @@ PKG_CHECK_MODULES(${this_target_pool} REQUIRED
 	gio-2.0
 	ttrace
 	vconf
+	libtzplatform-config
 	)
 
 FOREACH(flag ${${this_target_pool}_CFLAGS})
