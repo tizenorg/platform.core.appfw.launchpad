@@ -19,6 +19,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/mount.h>
 #include <fcntl.h>
 #include <dirent.h>
 #include <stdlib.h>
@@ -29,6 +30,7 @@
 #include <sys/un.h>
 #include <linux/limits.h>
 #include <unistd.h>
+#include <tzplatform_config.h>
 
 #include "launchpad_common.h"
 #include "key.h"
@@ -45,6 +47,9 @@
 #define OPTION_VALGRIND_NAME    "valgrind"
 #define OPTION_VALGRIND_SIZE    8
 #define MAX_CMD_BUFSZ 1024
+
+#define LEGACY_APP_ROOT_PATH "/opt/usr/apps"
+#define LEGACY_MEDIA_ROOT_PATH "/opt/usr/media"
 
 #define MAX_PENDING_CONNECTIONS 10
 #define CONNECT_RETRY_TIME 100 * 1000
@@ -807,5 +812,22 @@ int _close_all_fds(const int except)
 	closedir(dp);
 
 	return 0;
+}
+
+int _mount_legacy_app_path(const char *app_root_path,
+			const char *pkgid)
+{
+	char legacy_app_path[PATH_MAX];
+
+	snprintf(legacy_app_path, PATH_MAX,
+		"%s/%s", LEGACY_APP_ROOT_PATH, pkgid);
+
+	return mount(app_root_path, legacy_app_path, NULL, MS_BIND, NULL);
+}
+
+int _mount_legacy_media_path()
+{
+	return mount(tzplatform_getenv(TZ_USER_CONTENT),
+			LEGACY_MEDIA_ROOT_PATH, NULL, MS_BIND, NULL);
 }
 
