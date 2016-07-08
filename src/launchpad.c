@@ -23,6 +23,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include <sys/resource.h>
+#include <sched.h>
 #include <stdbool.h>
 #include <malloc.h>
 #include <bundle_internal.h>
@@ -89,6 +91,7 @@ static candidate_process_context_t *__add_slot(int type, int loader_id,
 		int detection_method, int timeout_val);
 static int __remove_slot(int type, int loader_id);
 static int __add_default_slots();
+static int stack_limit;
 
 static int __make_loader_id()
 {
@@ -350,6 +353,46 @@ static void __send_result_to_caller(int clifd, int ret, const char *app_path)
 	return;
 }
 
+static int __fork_app_process(int (*child_fn)(void *), void *arg)
+{
+	char *stack;
+	char *stack_top;
+	int pid;
+
+	stack = malloc(stack_limit);
+	if (stack == NULL) {
+		_E("failed to alloc child stack");
+		return -1;
+	}
+
+	stack_top = stack + stack_limit;
+
+	pid = clone(child_fn, stack_top,
+		CLONE_NEWNS | CLONE_CHILD_SETTID | CLONE_CHILD_CLEARTID | SIGCHLD,
+		arg);
+
+	free(stack);
+
+	if (pid == -1)
+		_E("failed to clone child process");
+
+	return pid;
+}
+
+static int __exec_loader_process(void *arg)
+{
+	char **argv = arg;
+	__signal_unblock_sigchld();
+	__signal_fini();
+
+	if (execv(argv[LOADER_ARG_PATH], argv) < 0)
+		_E("Failed to prepare candidate_process");
+	else
+		_D("Succeeded to prepare candidate_process");
+
+	return -1;
+}
+
 static int __prepare_candidate_process(int type, int loader_id)
 {
 	int pid;
@@ -367,23 +410,18 @@ static int __prepare_candidate_process(int type, int loader_id)
 	argv[LOADER_ARG_DUMMY] = argbuf;
 
 	cpt->last_exec_time = time(NULL);
-	pid = fork();
-	if (pid == 0) { /* child */
-		__signal_unblock_sigchld();
-		__signal_fini();
 
-		type_str[0] = '0' + type;
-		snprintf(loader_id_str, sizeof(loader_id_str), "%d", loader_id);
-		argv[LOADER_ARG_PATH] = cpt->loader_path;
-		argv[LOADER_ARG_TYPE] = type_str;
-		argv[LOADER_ARG_ID] = loader_id_str;
-		argv[LOADER_ARG_EXTRA] = cpt->loader_extra;
-		if (execv(argv[LOADER_ARG_PATH], argv) < 0)
-			_E("Failed to prepare candidate_process");
-		else
-			_D("Succeeded to prepare candidate_process");
+	type_str[0] = '0' + type;
+	snprintf(loader_id_str, sizeof(loader_id_str), "%d", loader_id);
+	argv[LOADER_ARG_PATH] = cpt->loader_path;
+	argv[LOADER_ARG_TYPE] = type_str;
+	argv[LOADER_ARG_ID] = loader_id_str;
+	argv[LOADER_ARG_EXTRA] = cpt->loader_extra;
 
-		exit(-1);
+	pid = __fork_app_process(__exec_loader_process, argv);
+	if (pid == -1) {
+		_E("Failed to fork candidate_process");
+		return -1;
 	} else {
 		cpt->pid = pid;
 	}
@@ -536,32 +574,70 @@ static int __prepare_exec(const char *appid, const char *app_path,
 	return 0;
 }
 
+struct app_launch_arg {
+	const char *appid;
+	const char *app_path;
+	appinfo_t *menu_info;
+	bundle *kb;
+};
+
+static int __exec_app_process(void *arg)
+{
+	struct app_launch_arg *launch_arg = arg;
+	char *home_dir;
+	int ret;
+
+	PERF("fork done");
+	_D("lock up test log(no error) : fork done");
+
+	__signal_unblock_sigchld();
+	__signal_fini();
+
+	_close_all_fds(0);
+	_delete_sock_path(getpid(), getuid());
+
+	home_dir = getenv("HOME");
+	if (home_dir) {
+		if (!strncmp(launch_arg->menu_info->root_path,
+			home_dir, strlen(home_dir))) {
+			ret = _mount_legacy_app_path(launch_arg->menu_info->root_path,
+					launch_arg->menu_info->pkgid);
+			if (ret != 0)
+				_W("Failed to mount legacy app path(%d)", errno);
+		}
+	}
+
+	ret = _mount_legacy_media_path();
+	if (ret != 0)
+		_W("Failed to mount legacy media path(%d)", errno);
+
+	PERF("prepare exec - first done");
+	if ((ret = __prepare_exec(launch_arg->appid, launch_arg->app_path,
+				launch_arg->menu_info, launch_arg->kb)) < 0)
+		return ret;
+
+	PERF("prepare exec - second done");
+	__real_launch(launch_arg->app_path, launch_arg->kb);
+
+	return PAD_ERR_FAILED;
+}
+
 static int __launch_directly(const char *appid, const char *app_path, int clifd,
 		bundle *kb, appinfo_t *menu_info,
 		candidate_process_context_t *cpc)
 {
-	int pid = fork();
-	int ret;
+	struct app_launch_arg arg;
 
-	if (pid == 0) {
-		PERF("fork done");
-		_D("lock up test log(no error) : fork done");
+	arg.appid = appid;
+	arg.app_path = app_path;
+	arg.menu_info = menu_info;
+	arg.kb = kb;
 
-		__signal_unblock_sigchld();
-		__signal_fini();
+	int pid = __fork_app_process(__exec_app_process, &arg);
 
-		_close_all_fds(0);
-		_delete_sock_path(getpid(), getuid());
+	if (pid <= 0)
+		_E("failed to fork app process");
 
-		PERF("prepare exec - first done");
-		if ((ret = __prepare_exec(appid, app_path, menu_info, kb)) < 0)
-			exit(ret);
-
-		PERF("prepare exec - second done");
-		__real_launch(app_path, kb);
-
-		exit(PAD_ERR_FAILED);
-	}
 	SECURE_LOGD("==> real launch pid : %d %s\n", pid, app_path);
 
 	return pid;
@@ -1387,12 +1463,21 @@ static void __set_priority(void)
 int main(int argc, char **argv)
 {
 	GMainLoop *mainloop = NULL;
+	int ret;
+	struct rlimit rlim;
 
 	mainloop = g_main_loop_new(NULL, FALSE);
 	if (!mainloop) {
 		_E("Failed to create glib main loop");
 		return -1;
 	}
+
+	ret = getrlimit(RLIMIT_STACK, &rlim);
+	if (ret != 0) {
+		_E("failed to get stack limit size! (%d)", errno);
+		return -1;
+	}
+	stack_limit = rlim.rlim_cur;
 
 	if (__before_loop(argc, argv) != 0) {
 		_E("process-pool Initialization failed!\n");
