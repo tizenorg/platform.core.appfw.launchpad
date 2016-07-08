@@ -110,9 +110,11 @@ static int __prepare_exec(const char *appid, const char *app_path,
 }
 
 static int __default_launch_cb(bundle *kb, const char *appid,
-		const char *app_path, const char *pkg_type, int loader_type)
+		const char *app_path, const char *root_path,
+		const char *pkgid, const char *pkg_type, int loader_type)
 {
 	char err_str[MAX_LOCAL_BUFSZ] = { 0, };
+	int ret;
 #ifdef _APPFW_FEATURE_PRIORITY_CHANGE
 	int res;
 	const char *high_priority = bundle_get_val(kb, AUL_K_HIGHPRIORITY);
@@ -129,6 +131,14 @@ static int __default_launch_cb(bundle *kb, const char *appid,
 	}
 	bundle_del(kb, AUL_K_HIGHPRIORITY);
 #endif
+
+	ret = _mount_legacy_app_path(root_path, pkgid);
+	if (ret != 0)
+		_W("Failed to mount legacy app path(%d)", errno);
+
+	ret = _mount_legacy_media_path();
+	if (ret != 0)
+		_W("Failed to mount legacy media path(%d)", errno);
 
 	if (__prepare_exec(appid, app_path, pkg_type, loader_type) < 0) {
 		_E("__candidate_process_prepare_exec() failed");
@@ -208,6 +218,7 @@ static int __candidate_process_launchpad_main_loop(app_pkt_t *pkt,
 	tmp_argv = _create_argc_argv(kb, &tmp_argc);
 
 	__default_launch_cb(kb, menu_info->appid, app_path,
+			menu_info->root_path, menu_info->pkgid,
 			menu_info->pkg_type, type);
 
 	if (__loader_callbacks->launch) {

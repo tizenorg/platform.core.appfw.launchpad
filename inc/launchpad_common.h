@@ -118,5 +118,9 @@ char *_appinfo_get_app_path(appinfo_t *menu_info);
 int _proc_get_attr_by_pid(int pid, char *buf, int size);
 int _close_all_fds(int except);
 
+int _mount_legacy_app_path(const char *app_root_path,
+			const char *pkgid);
+int _mount_legacy_media_path();
+
 #endif /* __LAUNCHPAD_COMMON_H__ */
 
