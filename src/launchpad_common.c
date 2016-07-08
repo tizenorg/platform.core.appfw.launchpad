@@ -19,6 +19,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/mount.h>
 #include <fcntl.h>
 #include <dirent.h>
 #include <stdlib.h>
@@ -29,6 +30,7 @@
 #include <sys/un.h>
 #include <linux/limits.h>
 #include <unistd.h>
+#include <tzplatform_config.h>
 
 #include "launchpad_common.h"
 #include "key.h"
@@ -45,6 +47,9 @@
 #define OPTION_VALGRIND_NAME    "valgrind"
 #define OPTION_VALGRIND_SIZE    8
 #define MAX_CMD_BUFSZ 1024
+
+#define LEGACY_APP_ROOT_PATH "/opt/usr/apps"
+#define LEGACY_MEDIA_ROOT_PATH "/opt/usr/media"
 
 #define MAX_PENDING_CONNECTIONS 10
 #define CONNECT_RETRY_TIME (100 * 1000)
@@ -808,5 +813,61 @@ int _close_all_fds(const int except)
 	closedir(dp);
 
 	return 0;
+}
+
+int _mount_legacy_app_path(const char *app_root_path,
+			const char *pkgid)
+{
+	const char *user_app_dir;
+	int ret, i;
+	char legacy_app_path[PATH_MAX];
+	char user_app_data_path[PATH_MAX];
+	char legacy_app_data_path[PATH_MAX];
+
+	char *app_data_paths[5] = {
+		"data",
+		"cache",
+		"shared/data",
+		"shared/cache",
+		"shared/trusted" };
+
+	snprintf(legacy_app_path, PATH_MAX,
+		"%s/%s", LEGACY_APP_ROOT_PATH, pkgid);
+
+	user_app_dir = tzplatform_getenv(TZ_USER_APP);
+	if (!user_app_dir) {
+		_E("failed to get TZ_USER_APP value");
+		return -1;
+	}
+
+	/* for user private app */
+	if (!strncmp(app_root_path, user_app_dir, strlen(user_app_dir))) {
+		return mount(app_root_path, legacy_app_path,
+				NULL, MS_BIND, NULL);
+	}
+
+	/* for global app */
+	for (i = 0; i < 5; i++) {
+		snprintf(user_app_data_path, PATH_MAX, "%s/%s/%s",
+				user_app_dir, pkgid, app_data_paths[i]);
+
+		if (access(user_app_data_path, F_OK) != 0)
+			continue;
+
+		snprintf(legacy_app_data_path, PATH_MAX, "%s/%s",
+				legacy_app_path, app_data_paths[i]);
+		ret = mount(user_app_data_path, legacy_app_data_path,
+				NULL, MS_BIND, NULL);
+		if (ret != 0)
+			return ret;
+	}
+
+	return 0;
+}
+
+int _mount_legacy_media_path()
+{
+	return mount(tzplatform_getenv(TZ_USER_CONTENT),
+			LEGACY_MEDIA_ROOT_PATH, NULL, MS_BIND, NULL);
 }
 
