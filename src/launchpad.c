@@ -50,6 +50,11 @@
 #define LOADER_PATH_DEFAULT "/usr/bin/launchpad-loader"
 #define LOADER_INFO_PATH	"/usr/share/aul"
 #define REGULAR_UID_MIN 5000
+#define PAD_ERR_FAILED			-1
+#define PAD_ERR_REJECTED		-2
+#define PAD_ERR_INVALID_ARGUMENT	-3
+#define PAD_ERR_INVALID_PATH		-4
+
 
 typedef struct {
 	int type;
@@ -503,29 +508,21 @@ static int __prepare_exec(const char *appid, const char *app_path,
 
 	/* SET PRIVILEGES*/
 	if (bundle_get_val(kb, AUL_K_PRIVACY_APPID) == NULL) {
-		_D("appId: %s / app_path : %s ", appid, app_path);
 		ret = security_manager_prepare_app(appid);
-		if (ret != SECURITY_MANAGER_SUCCESS) {
-			_D("fail to set privileges - check "
-					"your package's credential : %d\n",
-					ret);
-			return -1;
-		}
+		if (ret != SECURITY_MANAGER_SUCCESS)
+			return PAD_ERR_REJECTED;
 	}
 
 	/* SET DUMPABLE - for coredump*/
 	prctl(PR_SET_DUMPABLE, 1);
 
 	/* SET PROCESS NAME*/
-	if (app_path == NULL) {
-		_D("app_path should not be NULL - check menu db");
-		return -1;
-	}
+	if (app_path == NULL)
+		return PAD_ERR_INVALID_ARGUMENT;
+
 	file_name = strrchr(app_path, '/') + 1;
-	if (file_name == NULL) {
-		_D("can't locate file name to execute");
-		return -1;
-	}
+	if (file_name == NULL)
+		return PAD_ERR_INVALID_PATH;
 
 	_prepare_listen_sock();
 
@@ -544,6 +541,7 @@ static int __launch_directly(const char *appid, const char *app_path, int clifd,
 		candidate_process_context_t *cpc)
 {
 	int pid = fork();
+	int ret;
 
 	if (pid == 0) {
 		PERF("fork done");
@@ -556,19 +554,13 @@ static int __launch_directly(const char *appid, const char *app_path, int clifd,
 		_delete_sock_path(getpid(), getuid());
 
 		PERF("prepare exec - first done");
-		_D("lock up test log(no error) : prepare exec - first done");
-
-		if (__prepare_exec(appid, app_path, menu_info, kb) < 0) {
-			SECURE_LOGE("preparing work fail to launch - "
-				"can not launch %s\n", appid);
-			exit(-1);
-		}
+		if ((ret = __prepare_exec(appid, app_path, menu_info, kb)) < 0)
+			exit(ret);
 
 		PERF("prepare exec - second done");
-		_D("lock up test log(no error) : prepare exec - second done");
 		__real_launch(app_path, kb);
 
-		exit(-1);
+		exit(PAD_ERR_FAILED);
 	}
 	SECURE_LOGD("==> real launch pid : %d %s\n", pid, app_path);
 
@@ -795,10 +787,9 @@ static gboolean __handle_sigchild(gpointer data)
 		if (s == 0)
 			break;
 
-		if (s != sizeof(struct signalfd_siginfo)) {
-			_E("error reading sigchld info");
+		if (s != sizeof(struct signalfd_siginfo))
 			break;
-		}
+
 		__launchpad_process_sigchld(&siginfo);
 		cpc = __find_slot_from_pid(siginfo.ssi_pid);
 		if (cpc != NULL) {
