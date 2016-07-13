@@ -817,7 +817,7 @@ static gboolean __handle_label_monitor(gpointer data)
 
 	while (iter) {
 		cpc = (candidate_process_context_t *)iter->data;
-		if (cpc->prepared) {
+		if (cpc->pid > 0) {
 			if (cpc->source > 0) {
 				g_source_remove(cpc->source);
 				cpc->source = 0;
