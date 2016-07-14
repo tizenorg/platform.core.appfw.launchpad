@@ -520,8 +520,12 @@ static int __prepare_exec(const char *appid, const char *app_path,
 	if (app_path == NULL)
 		return PAD_ERR_INVALID_ARGUMENT;
 
-	file_name = strrchr(app_path, '/') + 1;
+	file_name = strrchr(app_path, '/');
 	if (file_name == NULL)
+		return PAD_ERR_INVALID_PATH;
+
+	file_name++;
+	if (file_name == '\0')
 		return PAD_ERR_INVALID_PATH;
 
 	_prepare_listen_sock();
