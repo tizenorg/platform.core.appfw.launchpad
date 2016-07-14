@@ -88,8 +88,14 @@ static int __prepare_exec(const char *appid, const char *app_path,
 		return -1;
 	}
 
-	file_name = strrchr(app_path, '/') + 1;
+	file_name = strrchr(app_path, '/');
 	if (file_name == NULL) {
+		_D("file_name is NULL");
+		return -1;
+	}
+
+	file_name++;
+	if (*file_name == '\0') {
 		_D("can't locate file name to execute");
 		return -1;
 	}
