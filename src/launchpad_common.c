@@ -47,7 +47,7 @@
 #define MAX_CMD_BUFSZ 1024
 
 #define MAX_PENDING_CONNECTIONS 10
-#define CONNECT_RETRY_TIME 100 * 1000
+#define CONNECT_RETRY_TIME (100 * 1000)
 #define CONNECT_RETRY_COUNT 3
 #define AUL_PKT_HEADER_SIZE (sizeof(int) + sizeof(int) + sizeof(int))
 
@@ -67,9 +67,9 @@ static int __read_proc(const char *path, char *buf, int size)
 	if (ret <= 0) {
 		close(fd);
 		return -1;
-	} else
-		buf[ret] = 0;
+	}
 
+	buf[ret] = 0;
 	close(fd);
 
 	return ret;
@@ -269,8 +269,9 @@ app_pkt_t *_recv_pkt_raw(int fd, int *clifd, struct ucred *cr)
 
 	sun_size = sizeof(struct sockaddr_un);
 
-	if ((*clifd = accept(fd, (struct sockaddr *)&aul_addr,
-			(socklen_t *) &sun_size)) == -1) {
+	*clifd = accept(fd, (struct sockaddr *)&aul_addr,
+			(socklen_t *) &sun_size);
+	if (*clifd == -1) {
 		if (errno != EINTR)
 			_E("accept error");
 		return NULL;
@@ -742,7 +743,7 @@ static int __delete_dir(const char *path)
 		ret = stat(buf, &statbuf);
 		if (ret == 0) {
 			if (S_ISDIR(statbuf.st_mode))
-				 __delete_dir(buf);
+				__delete_dir(buf);
 			else
 				unlink(buf);
 		}

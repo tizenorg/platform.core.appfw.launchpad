@@ -27,7 +27,7 @@
 #define AUL_DBUS_APPDEAD_SIGNAL		"app_dead"
 #define AUL_DBUS_APPLAUNCH_SIGNAL	"app_launch"
 
-static GDBusConnection *bus = NULL;
+static GDBusConnection *bus;
 static sigset_t oldmask;
 
 static inline void __socket_garbage_collector(void)
@@ -165,8 +165,6 @@ static void __launchpad_process_sigchld(struct signalfd_siginfo *info)
 			killpg(child_pgid, SIGKILL);
 		__sigchild_action(child_pid);
 	}
-
-	return;
 }
 
 static inline int __signal_init(void)
@@ -233,11 +231,14 @@ static inline int __signal_unblock_sigchld(void)
 
 static inline int __signal_fini(void)
 {
+#ifndef PRELOAD_ACTIVATE
+	int i;
+#endif
+
 	if (bus)
 		g_object_unref(bus);
 
 #ifndef PRELOAD_ACTIVATE
-	int i;
 	for (i = 0; i < _NSIG; i++)
 		signal(i, SIG_DFL);
 #endif

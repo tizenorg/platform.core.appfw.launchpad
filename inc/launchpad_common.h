@@ -53,21 +53,6 @@
 #define _D(fmt, arg...) LOGD(fmt, ##arg)
 #define _W(fmt, arg...) LOGW(fmt, ##arg)
 
-#define retvm_if(expr, val, fmt, arg...) do { \
-	if (expr) { \
-		_E(fmt, ##arg); \
-		_E("(%s) -> %s() return", #expr, __FUNCTION__); \
-		return (val); \
-	} \
-} while (0)
-
-#define retv_if(expr, val) do { \
-	if (expr) { \
-		_E("(%s) -> %s() return", #expr, __FUNCTION__); \
-		return (val); \
-	} \
-} while (0)
-
 enum loader_arg {
 	LOADER_ARG_PATH,
 	LOADER_ARG_TYPE,
