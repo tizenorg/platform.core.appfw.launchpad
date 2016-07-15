@@ -269,14 +269,19 @@ static int __loader_launch_cb(int argc, char **argv, const char *app_path,
 
 static void __close_fds(void)
 {
-	int fd = -1;
-	const char *sockfd;
+	int fds[2] = { 0, };
+	const char *sock_fd;
+	const char *extra_fd;
 
-	sockfd = getenv("AUL_LISTEN_SOCK");
-	if (sockfd)
-		fd = atoi(sockfd);
+	sock_fd = getenv("AUL_LISTEN_SOCK");
+	if (sock_fd)
+		fds[0] = atoi(sock_fd);
 
-	_close_all_fds(fd);
+	extra_fd = getenv("AUL_EXTRA_DATA_FD");
+	if (extra_fd)
+		fds[1] = atoi(extra_fd);
+
+	_close_all_fds(fds, ARRAY_SIZE(fds));
 }
 
 static int __loader_terminate_cb(int argc, char **argv, void *user_data)
