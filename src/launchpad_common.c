@@ -17,6 +17,7 @@
 #define _GNU_SOURCE
 
 #include <string.h>
+#include <stdbool.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mount.h>
@@ -773,7 +774,19 @@ int _delete_sock_path(int pid, uid_t uid)
 	return 0;
 }
 
-int _close_all_fds(const int except)
+static bool __is_except(int fd, const int except[], unsigned int n)
+{
+	unsigned int i;
+
+	for (i = 0; i < n; i++) {
+		if (except[i] == fd)
+			return true;
+	}
+
+	return false;
+}
+
+int _close_all_fds(const int except[], unsigned int n)
 {
 	DIR *dp;
 	struct dirent dentry;
@@ -786,8 +799,10 @@ int _close_all_fds(const int except)
 		/* fallback */
 		max_fd = sysconf(_SC_OPEN_MAX);
 		for (fd = 3; fd < max_fd; fd++) {
-			if (fd != except)
-				close(fd);
+			if (__is_except(fd, except, n))
+				continue;
+
+			close(fd);
 		}
 
 		return 0;
@@ -804,7 +819,7 @@ int _close_all_fds(const int except)
 		if (fd == dirfd(dp))
 			continue;
 
-		if (fd == except)
+		if (__is_except(fd, except, n))
 			continue;
 
 		close(fd);
@@ -869,5 +884,73 @@ int _mount_legacy_app_path(const char *app_root_path,
 	}
 
 	return 0;
+}
+
+int _set_extra_data(const char *extra_data)
+{
+	int pipe[2];
+	int r;
+	ssize_t ret;
+	ssize_t len;
+	char buf[12];
+	unsigned int datalen;
+
+	if (extra_data == NULL) {
+		_E("Invalid parameter");
+		return -1;
+	}
+
+	_D("extra: %s", extra_data);
+
+	r = pipe2(pipe, O_NONBLOCK);
+	if (r != 0) {
+		_E("Failed to create pipe");
+		return -1;
+	}
+
+	datalen = strlen(extra_data);
+	ret = write(pipe[1], &datalen, sizeof(datalen));
+	if (ret < 0) {
+		_E("Failed to write datalen");
+		close(pipe[1]);
+		close(pipe[0]);
+		return -1;
+	}
+
+	len = 0;
+	while (len < datalen) {
+		ret = write(pipe[1], extra_data, datalen - len);
+		if (ret < 0) {
+			_E("Failed to wrtie %s", extra_data);
+			close(pipe[1]);
+			close(pipe[0]);
+			return -1;
+		}
+		len += ret;
+	}
+	close(pipe[1]);
+
+	snprintf(buf, sizeof(buf), "%d", pipe[0]);
+	setenv("AUL_EXTRA_DATA_FD", buf, 1);
+
+	return 0;
+}
+
+void _close_extra_data_fd(void)
+{
+	const char *fd_str;
+	int fd;
+
+	fd_str = getenv("AUL_EXTRA_DATA_FD");
+	if (fd_str == NULL)
+		return;
+
+	unsetenv("AUL_EXTRA_DATA_FD");
+
+	fd = atoi(fd_str);
+	if (fd < 0)
+		return;
+
+	close(fd);
 }
 
