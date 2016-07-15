@@ -92,8 +92,11 @@ static void __parse_app_types(loader_info_t *info, char *line)
 	while (token) {
 		refined_tok[0] = '\0';
 		sscanf(token, "%s", refined_tok);
-		if (refined_tok[0] != '\0' && strcasecmp("null", refined_tok) != 0)
-			info->app_types = g_list_append(info->app_types, strdup(refined_tok));
+		if (refined_tok[0] != '\0' &&
+				strcasecmp("null", refined_tok) != 0) {
+			info->app_types = g_list_append(info->app_types,
+						strdup(refined_tok));
+		}
 		token = strtok_r(NULL, "|", &savedptr);
 	}
 }
@@ -194,7 +197,7 @@ static GList *__parse_file(GList *list, const char *path)
 			cur_info->timeout_val = atoi(tok2);
 		} else if (strcasecmp(TAG_EXTRA, tok1) == 0) {
 			__parse_extra(cur_info, buf);
-		} else if (strcasecmp(TAG_EXTRA_ARRAY,tok1) == 0) {
+		} else if (strcasecmp(TAG_EXTRA_ARRAY, tok1) == 0) {
 			__flush_extra_array(cur_info->extra, key, extra_array);
 			extra_array = NULL;
 			key = strdup(tok2);
@@ -320,12 +323,15 @@ static int __comp_name(gconstpointer a, gconstpointer b)
 
 int _loader_info_find_type(GList *info,  const char *app_type, bool hwacc)
 {
-	GList *cur = NULL;
+	GList *cur;
 
-	if (hwacc)
-		cur = g_list_find_custom(info, app_type, __comp_app_type_with_hw_acc);
-	else
-		cur = g_list_find_custom(info, app_type, __comp_app_type_with_sw_acc);
+	if (hwacc) {
+		cur = g_list_find_custom(info, app_type,
+				__comp_app_type_with_hw_acc);
+	} else {
+		cur = g_list_find_custom(info, app_type,
+				__comp_app_type_with_sw_acc);
+	}
 
 	if (cur == NULL)
 		return -1;
@@ -399,7 +405,8 @@ int *_loader_get_alternative_types(GList *info, int type, int *len)
 			if (!i->alternative_loaders)
 				return NULL;
 
-			return __make_type_array(info, i->alternative_loaders, len);
+			return __make_type_array(info, i->alternative_loaders,
+					len);
 		}
 		cur = g_list_next(cur);
 	}
