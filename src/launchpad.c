@@ -356,7 +356,7 @@ static int __prepare_candidate_process(int type, int loader_id)
 	char type_str[2] = {0, };
 	char loader_id_str[10] = {0, };
 	char argbuf[LOADER_ARG_LEN];
-	char *argv[] = {NULL, NULL, NULL, NULL, NULL, NULL};
+	char *argv[] = {NULL, NULL, NULL, NULL, NULL};
 	candidate_process_context_t *cpt = __find_slot(type, loader_id);
 
 	if (cpt == NULL)
@@ -377,7 +377,8 @@ static int __prepare_candidate_process(int type, int loader_id)
 		argv[LOADER_ARG_PATH] = cpt->loader_path;
 		argv[LOADER_ARG_TYPE] = type_str;
 		argv[LOADER_ARG_ID] = loader_id_str;
-		argv[LOADER_ARG_EXTRA] = cpt->loader_extra;
+
+		_set_extra_data(cpt->loader_extra);
 		if (execv(argv[LOADER_ARG_PATH], argv) < 0)
 			_E("Failed to prepare candidate_process");
 		else
@@ -475,20 +476,22 @@ static int __normal_fork_exec(int argc, char **argv)
 static void __real_launch(const char *app_path, bundle * kb)
 {
 	int app_argc;
-	char **app_argv;
-	int i;
+	char *app_argv[] = {NULL, NULL};
+	char *extra_data = NULL;
+	int len;
+	int r;
 
 	if (bundle_get_val(kb, AUL_K_DEBUG) != NULL)
 		putenv("TIZEN_DEBUGGING_PORT=1");
 
-	app_argv = _create_argc_argv(kb, &app_argc);
-	app_argv[LOADER_ARG_PATH] = strdup(app_path);
+	r = bundle_encode(kb, (bundle_raw **)&extra_data, &len);
+	if (r != BUNDLE_ERROR_NONE)
+		exit(-1);
 
-	for (i = 0; i < app_argc; i++) {
-		if ((i % 2) == 1)
-			continue;
-		SECURE_LOGD("input argument %d : %s##", i, app_argv[i]);
-	}
+	_set_extra_data(extra_data);
+	free(extra_data);
+
+	app_argv[LOADER_ARG_PATH] = strdup(app_path);
 
 	PERF("setup argument done");
 	__normal_fork_exec(app_argc, app_argv);
@@ -546,6 +549,7 @@ static int __launch_directly(const char *appid, const char *app_path, int clifd,
 {
 	int pid = fork();
 	int ret;
+	int fds[1] = { 0 };
 
 	if (pid == 0) {
 		PERF("fork done");
@@ -554,7 +558,7 @@ static int __launch_directly(const char *appid, const char *app_path, int clifd,
 		__signal_unblock_sigchld();
 		__signal_fini();
 
-		_close_all_fds(0);
+		_close_all_fds(fds, ARRAY_SIZE(fds));
 		_delete_sock_path(getpid(), getuid());
 
 		PERF("prepare exec - first done");
