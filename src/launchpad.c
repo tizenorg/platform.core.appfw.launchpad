@@ -88,9 +88,9 @@ static candidate_process_context_t *__add_slot(int type, int loader_id,
 		int caller_pid, const char *loader_path, const char *extra,
 		int detection_method, int timeout_val);
 static int __remove_slot(int type, int loader_id);
-static int __add_default_slots();
+static int __add_default_slots(void);
 
-static int __make_loader_id()
+static int __make_loader_id(void)
 {
 	static int id = PAD_LOADER_ID_DYNAMIC_BASE;
 
@@ -346,8 +346,6 @@ static void __send_result_to_caller(int clifd, int ret, const char *app_path)
 
 	if (__real_send(clifd, ret) < 0)
 		__kill_process(ret);
-
-	return;
 }
 
 static int __prepare_candidate_process(int type, int loader_id)
@@ -472,7 +470,7 @@ static int __normal_fork_exec(int argc, char **argv)
 	return 0;
 }
 
-static void __real_launch(const char *app_path, bundle * kb)
+static void __real_launch(const char *app_path, bundle *kb)
 {
 	int app_argc;
 	char **app_argv;
@@ -495,7 +493,7 @@ static void __real_launch(const char *app_path, bundle * kb)
 }
 
 static int __prepare_exec(const char *appid, const char *app_path,
-			appinfo_t *menu_info, bundle * kb)
+			appinfo_t *menu_info, bundle *kb)
 {
 	char *file_name;
 	char process_name[AUL_PR_NAME];
@@ -558,7 +556,8 @@ static int __launch_directly(const char *appid, const char *app_path, int clifd,
 		_delete_sock_path(getpid(), getuid());
 
 		PERF("prepare exec - first done");
-		if ((ret = __prepare_exec(appid, app_path, menu_info, kb)) < 0)
+		ret = __prepare_exec(appid, app_path, menu_info, kb);
+		if (ret < 0)
 			exit(ret);
 
 		PERF("prepare exec - second done");
@@ -667,6 +666,7 @@ static guint __poll_fd(int fd, gushort events, GSourceFunc func, int type,
 	int r;
 	GPollFD *gpollfd;
 	GSource *src;
+	loader_context_t *lc;
 
 	src = g_source_new(&funcs, sizeof(GSource));
 	if (!src) {
@@ -674,7 +674,7 @@ static guint __poll_fd(int fd, gushort events, GSourceFunc func, int type,
 		return 0;
 	}
 
-	gpollfd = (GPollFD *) g_malloc(sizeof(GPollFD));
+	gpollfd = (GPollFD *)g_malloc(sizeof(GPollFD));
 	if (!gpollfd) {
 		_E("out of memory");
 		g_source_destroy(src);
@@ -684,7 +684,7 @@ static guint __poll_fd(int fd, gushort events, GSourceFunc func, int type,
 	gpollfd->events = events;
 	gpollfd->fd = fd;
 
-	loader_context_t *lc = malloc(sizeof(loader_context_t));
+	lc = malloc(sizeof(loader_context_t));
 	if (lc == NULL) {
 		g_free(gpollfd);
 		g_source_destroy(src);
@@ -722,8 +722,9 @@ static gboolean __handle_loader_client_event(gpointer data)
 		return G_SOURCE_REMOVE;
 
 	if (revents & (G_IO_HUP | G_IO_NVAL)) {
-		SECURE_LOGE("Type %d candidate process was (POLLHUP|POLLNVAL), "
-				"pid: %d", cpc->type, cpc->pid);
+		SECURE_LOGE("Type %d candidate process was " \
+				"(POLLHUP|POLLNVAL), pid: %d",
+				cpc->type, cpc->pid);
 		close(cpc->send_fd);
 
 		cpc->prepared = false;
@@ -762,8 +763,8 @@ static gboolean __handle_loader_event(gpointer data)
 			cpc->prepared = true;
 			cpc->send_fd = client_fd;
 
-			SECURE_LOGD("Type %d candidate process was connected, "
-					"pid: %d", type, cpc->pid);
+			SECURE_LOGD("Type %d candidate process was connected," \
+					" pid: %d", type, cpc->pid);
 			cpc->source = __poll_fd(client_fd, G_IO_IN | G_IO_HUP,
 					__handle_loader_client_event, type,
 					loader_id);
@@ -944,10 +945,13 @@ static candidate_process_context_t *__find_available_slot(const char *hwacc,
 	int len = 0;
 	int i;
 
-	if (loader_name)
-		type = _loader_info_find_type_by_loader_name(loader_info_list, loader_name);
-	else
-		type = _loader_info_find_type(loader_info_list,  app_type, __is_hw_acc(hwacc));
+	if (loader_name) {
+		type = _loader_info_find_type_by_loader_name(loader_info_list,
+				loader_name);
+	} else {
+		type = _loader_info_find_type(loader_info_list,
+				app_type, __is_hw_acc(hwacc));
+	}
 	cpc = __find_slot(type, PAD_LOADER_ID_STATIC);
 	if (!cpc)
 		return NULL;
@@ -1073,11 +1077,16 @@ static gboolean __handle_launch_event(gpointer data)
 	if (menu_info->comp_type &&
 			strcmp(menu_info->comp_type, "svcapp") == 0) {
 		loader_id = PAD_LOADER_ID_DIRECT;
-	} else if ((loader_id = __get_loader_id(kb)) <= PAD_LOADER_ID_STATIC) {
-		cpc = __find_available_slot(menu_info->hwacc, menu_info->app_type, menu_info->loader_name);
 	} else {
-		type = LAUNCHPAD_TYPE_DYNAMIC;
-		cpc = __find_slot(type, loader_id);
+		loader_id = __get_loader_id(kb);
+		if (loader_id <= PAD_LOADER_ID_STATIC) {
+			cpc = __find_available_slot(menu_info->hwacc,
+					menu_info->app_type,
+					menu_info->loader_name);
+		} else {
+			type = LAUNCHPAD_TYPE_DYNAMIC;
+			cpc = __find_slot(type, loader_id);
+		}
 	}
 
 	_modify_bundle(kb, cr.pid, menu_info, pkt->cmd);
@@ -1152,7 +1161,7 @@ static candidate_process_context_t *__add_slot(int type, int loader_id,
 
 	fd = __listen_candidate_process(cpc->type, cpc->loader_id);
 	if (fd == -1) {
-		_E("[launchpad] Listening the socket to "
+		_E("[launchpad] Listening the socket to " \
 				"the type %d candidate process failed.",
 				cpc->type);
 		free(cpc);
@@ -1176,8 +1185,8 @@ static int __remove_slot(int type, int loader_id)
 {
 	candidate_process_context_t *cpc;
 	GList *iter;
-	iter = candidate_slot_list;
 
+	iter = candidate_slot_list;
 	while (iter) {
 		cpc = (candidate_process_context_t *)iter->data;
 		if (type == cpc->type && loader_id == cpc->loader_id) {
@@ -1263,7 +1272,8 @@ static int __init_label_monitor_fd(void)
 		return -1;
 	}
 
-	pollfd = __poll_fd(fd, G_IO_IN, (GSourceFunc)__handle_label_monitor, 0, 0);
+	pollfd = __poll_fd(fd, G_IO_IN,
+			(GSourceFunc)__handle_label_monitor, 0, 0);
 	if (pollfd == 0) {
 		close(fd);
 		return -1;
@@ -1278,9 +1288,11 @@ static void __add_slot_from_info(gpointer data, gpointer user_data)
 	candidate_process_context_t *cpc;
 	bundle_raw *extra = NULL;
 	int len;
+	int ret;
 
 	if (!strcmp(info->exe, "null")) {
-		cpc = __add_slot(LAUNCHPAD_TYPE_USER + user_slot_offset, PAD_LOADER_ID_DIRECT,
+		cpc = __add_slot(LAUNCHPAD_TYPE_USER + user_slot_offset,
+				PAD_LOADER_ID_DIRECT,
 				0, info->exe, NULL, 0, 0);
 		if (cpc == NULL)
 			return;
@@ -1294,13 +1306,17 @@ static void __add_slot_from_info(gpointer data, gpointer user_data)
 		if (info->extra)
 			bundle_encode(info->extra, &extra, &len);
 
-		cpc = __add_slot(LAUNCHPAD_TYPE_USER + user_slot_offset, PAD_LOADER_ID_STATIC,
-				0, info->exe, (char *)extra, info->detection_method, info->timeout_val);
+		cpc = __add_slot(LAUNCHPAD_TYPE_USER + user_slot_offset,
+				PAD_LOADER_ID_STATIC,
+				0, info->exe, (char *)extra,
+				info->detection_method, info->timeout_val);
 		if (cpc == NULL)
 			return;
 
-		if (__prepare_candidate_process(LAUNCHPAD_TYPE_USER + user_slot_offset,
-				PAD_LOADER_ID_STATIC) != 0)
+		ret = __prepare_candidate_process(
+				LAUNCHPAD_TYPE_USER + user_slot_offset,
+				PAD_LOADER_ID_STATIC);
+		if (ret != 0)
 			return;
 
 		info->type = LAUNCHPAD_TYPE_USER + user_slot_offset;
@@ -1381,7 +1397,7 @@ static void __set_priority(void)
 
 	res = setpriority(PRIO_PROCESS, 0, -12);
 	if (res == -1) {
-		SECURE_LOGE("Setting process (%d) priority to -12 failed, "
+		SECURE_LOGE("Setting process (%d) priority to -12 failed, " \
 				"errno: %d (%s)", getpid(), errno,
 				strerror_r(errno, err_str, sizeof(err_str)));
 	}

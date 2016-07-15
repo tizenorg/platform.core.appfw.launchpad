@@ -20,17 +20,17 @@
 #include <glib.h>
 #define PREEXEC_FILE SHARE_PREFIX"/preexec_list.txt"
 
-static int preexec_initialized = 0;
+static int preexec_initialized;
 
-GSList *preexec_list = NULL;
+static GSList *preexec_list;
 
 typedef struct _preexec_list_t {
 	char *pkg_type;
 	char *so_path;
-	int (*dl_do_pre_exe) (char *, char *);
+	int (*dl_do_pre_exe)(char *, char *);
 } preexec_list_t;
 
-static void __preexec_list_free()
+static void __preexec_list_free(void)
 {
 	GSList *iter = NULL;
 	preexec_list_t *type_t;
@@ -47,7 +47,6 @@ static void __preexec_list_free()
 	}
 	g_slist_free(preexec_list);
 	preexec_initialized = 0;
-	return;
 }
 
 static inline void __preexec_init(int argc, char **argv)
@@ -59,7 +58,7 @@ static inline void __preexec_init(int argc, char **argv)
 	char *type = NULL;
 	char *sopath = NULL;
 	char *symbol = NULL;
-	int (*func) (char *, char *) = NULL;
+	int (*func)(char *, char *) = NULL;
 	preexec_list_t *type_t = NULL;
 
 	preexec_file = fopen(PREEXEC_FILE, "rt");
@@ -166,7 +165,7 @@ static inline void __preexec_run(const char *pkg_type, const char *pkg_name,
 
 #else
 
-static void __preexec_list_free()
+static void __preexec_list_free(void)
 {
 }
 

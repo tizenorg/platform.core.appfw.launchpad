@@ -37,7 +37,7 @@
 #define LOADER_TYPE_SW		"sw-loader"
 
 
-extern bundle *launchpad_loader_get_bundle();
+extern bundle *launchpad_loader_get_bundle(void);
 
 static Ecore_Fd_Handler *__fd_handler;
 static loader_receiver_cb __receiver;
@@ -81,6 +81,7 @@ static void __init_theme(void)
 	char *theme = elm_theme_list_item_path_get(eina_list_data_get(
 			elm_theme_list_get(NULL)), NULL);
 	Eina_Bool is_exist = edje_file_group_exists(theme, "*");
+
 	if (!is_exist)
 		_D("theme path: %s", theme);
 
@@ -241,8 +242,10 @@ static int __loader_launch_cb(int argc, char **argv, const char *app_path,
 	const char *hwacc;
 	bundle *kb = launchpad_loader_get_bundle();
 	int acc = SW_ACC;
+	loader_convertible convert;
 
-	vconf_ignore_key_changed(VCONFKEY_SETAPPL_APP_HW_ACCELERATION, __vconf_cb);
+	vconf_ignore_key_changed(VCONFKEY_SETAPPL_APP_HW_ACCELERATION,
+			__vconf_cb);
 	if (kb == NULL)
 		return 0;
 
@@ -257,7 +260,7 @@ static int __loader_launch_cb(int argc, char **argv, const char *app_path,
 		acc = HW_ACC;
 	}
 
-	loader_convertible convert = __converter_table[__type][acc];
+	convert = __converter_table[__type][acc];
 	if (convert)
 		convert();
 
@@ -309,7 +312,7 @@ do_dlopen:
 	handle = dlopen(argv[LOADER_ARG_PATH],
 			RTLD_LAZY | RTLD_GLOBAL | RTLD_DEEPBIND);
 	if (handle == NULL) {
-		_E("dlopen failed(%s). Please complile with -fPIE and "
+		_E("dlopen failed(%s). Please complile with -fPIE and " \
 				"link with -pie flag", dlerror());
 		goto do_exec;
 	}
@@ -346,7 +349,7 @@ do_exec:
 			setenv("LD_LIBRARY_PATH", libdir, 1);
 		free(libdir);
 		if (execv(argv[LOADER_ARG_PATH], argv) < 0) {
-			SECURE_LOGE("execv() failed for file: \"%s\", "
+			SECURE_LOGE("execv() failed for file: \"%s\", " \
 				"error: %d (%s)", argv[LOADER_ARG_PATH], errno,
 				strerror_r(errno, err_str, sizeof(err_str)));
 		}

@@ -35,7 +35,7 @@
 #include "preexec.h"
 
 #ifndef API
-#define API __attribute__ ((visibility("default")))
+#define API (__attribute__ ((visibility("default"))))
 #endif
 
 #define AUL_PR_NAME 16
@@ -50,7 +50,7 @@ static bundle *__bundle;
 static int __loader_type = LAUNCHPAD_TYPE_UNSUPPORTED;
 static int __loader_id;
 
-static void __at_exit_to_release_bundle()
+static void __at_exit_to_release_bundle(void)
 {
 	if (__bundle)
 		bundle_free(__bundle);
@@ -70,8 +70,8 @@ static int __prepare_exec(const char *appid, const char *app_path,
 		appid, pkg_type, app_path);
 	ret = security_manager_prepare_app(appid);
 	if (ret != SECURITY_MANAGER_SUCCESS) {
-		_D("fail to set privileges - check your package's credential: "
-				"%d\n", ret);
+		_D("fail to set privileges - " \
+				"check your package's credential: %d\n", ret);
 		return -1;
 	}
 
@@ -121,7 +121,7 @@ static int __default_launch_cb(bundle *kb, const char *appid,
 	if (strncmp(high_priority, "true", 4) == 0) {
 		res = setpriority(PRIO_PROCESS, 0, -10);
 		if (res == -1) {
-			SECURE_LOGE("Setting process (%d) priority "
+			SECURE_LOGE("Setting process (%d) priority " \
 				"to -10 failed, errno: %d (%s)",
 				getpid(), errno,
 				strerror_r(errno, err_str, sizeof(err_str)));
@@ -133,7 +133,7 @@ static int __default_launch_cb(bundle *kb, const char *appid,
 	if (__prepare_exec(appid, app_path, pkg_type, loader_type) < 0) {
 		_E("__candidate_process_prepare_exec() failed");
 		if (access(app_path, F_OK | R_OK)) {
-			SECURE_LOGE("access() failed for file: \"%s\", "
+			SECURE_LOGE("access() failed for file: \"%s\", " \
 				"error: %d (%s)", app_path, errno,
 				strerror_r(errno, err_str, sizeof(err_str)));
 		}
@@ -294,7 +294,7 @@ static int __before_loop(int argc, char **argv)
 	int res = setpriority(PRIO_PROCESS, 0, LOWEST_PRIO);
 
 	if (res == -1) {
-		SECURE_LOGE("Setting process (%d) priority to %d failed, "
+		SECURE_LOGE("Setting process (%d) priority to %d failed, " \
 				"errno: %d (%s)", getpid(), LOWEST_PRIO, errno,
 				strerror_r(errno, err_str, sizeof(err_str)));
 	}
@@ -324,7 +324,7 @@ static int __before_loop(int argc, char **argv)
 #ifdef _APPFW_FEATURE_LOADER_PRIORITY
 	res = setpriority(PRIO_PGRP, 0, 0);
 	if (res == -1) {
-		SECURE_LOGE("Setting process (%d) priority to 0 failed, "
+		SECURE_LOGE("Setting process (%d) priority to 0 failed, " \
 				"errno: %d (%s)", getpid(), errno,
 				strerror_r(errno, err_str, sizeof(err_str)));
 	}

@@ -46,7 +46,7 @@ static struct timeval __g_base_time = {
 		if (__g_base_time.tv_sec != 0) { \
 			timersub(&cur, &__g_base_time, &res); \
 			printf("%c[1;31m[%s,%d] %ld sec %ld msec "fmt \
-					" %c[0m\n", 27, __FUNCTION__, \
+					" %c[0m\n", 27, __func__, \
 					__LINE__, res.tv_sec, \
 					res.tv_usec/1000, ##arg, 27);\
 		} \
