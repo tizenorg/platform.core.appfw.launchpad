@@ -73,6 +73,7 @@ mkdir -p %{buildroot}/usr/share/license
 cp %{_builddir}/%{name}-%{version}/LICENSE  %{buildroot}/usr/share/license/%{name}
 
 %post
+chsmack -e System::Privileged %{_bindir}/launchpad-process-pool
 
 %files
 %manifest launchpad.manifest
