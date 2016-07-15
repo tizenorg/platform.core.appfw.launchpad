@@ -153,6 +153,8 @@ static int __candidate_process_launchpad_main_loop(app_pkt_t *pkt,
 	char **tmp_argv = NULL;
 	int ret = -1;
 	int i;
+	char *extra_data = NULL;
+	int len;
 
 	kb = bundle_decode(pkt->data, pkt->len);
 	if (!kb) {
@@ -216,15 +218,22 @@ static int __candidate_process_launchpad_main_loop(app_pkt_t *pkt,
 				menu_info->pkg_type, __loader_user_data);
 	}
 
+	bundle_free_exported_argv(tmp_argc, &tmp_argv);
 	/* SET ENVIROMENT*/
 	_set_env(menu_info, kb);
+
+	ret = bundle_encode(kb, (bundle_raw **)&extra_data, &len);
+	if (ret != BUNDLE_ERROR_NONE)
+		_E("Failed to encode bundle");
+
+	_set_extra_data(extra_data);
+	free(extra_data);
 
 	if (out_app_path != NULL && out_argc != NULL && out_argv != NULL) {
 		memset(out_app_path, '\0', strlen(out_app_path));
 		snprintf(out_app_path, LOADER_ARG_LEN, "%s", app_path);
 
-		*out_argv = tmp_argv;
-		*out_argc = tmp_argc;
+		*out_argc = 1;
 		(*out_argv)[LOADER_ARG_PATH] = out_app_path;
 
 		for (i = 0; i < *out_argc; i++) {
@@ -288,6 +297,7 @@ static int __before_loop(int argc, char **argv)
 {
 	int client_fd;
 	int ret = -1;
+	unsigned char *extra_data;
 	bundle *extra = NULL;
 #ifdef _APPFW_FEATURE_LOADER_PRIORITY
 	char err_str[MAX_LOCAL_BUFSZ] = { 0, };
@@ -306,9 +316,11 @@ static int __before_loop(int argc, char **argv)
 	/* TODO : should be add to check permission in the kernel*/
 	setsid();
 
-	if (argc > 3) {
-		extra = bundle_decode((bundle_raw *)argv[LOADER_ARG_EXTRA],
-				strlen(argv[LOADER_ARG_EXTRA]));
+	extra_data = aul_get_extra_data();
+	if (extra_data) {
+		extra = bundle_decode((bundle_raw *)extra_data,
+				strlen((const char *)extra_data));
+		free(extra_data);
 	}
 
 	if (__loader_callbacks->create) {
