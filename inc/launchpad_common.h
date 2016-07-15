@@ -53,11 +53,12 @@
 #define _D(fmt, arg...) LOGD(fmt, ##arg)
 #define _W(fmt, arg...) LOGW(fmt, ##arg)
 
+#define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
+
 enum loader_arg {
 	LOADER_ARG_PATH,
 	LOADER_ARG_TYPE,
 	LOADER_ARG_ID,
-	LOADER_ARG_EXTRA,
 	LOADER_ARG_DUMMY,
 };
 
@@ -101,7 +102,8 @@ appinfo_t *_appinfo_create(bundle *kb);
 void _appinfo_free(appinfo_t *menu_info);
 char *_appinfo_get_app_path(appinfo_t *menu_info);
 int _proc_get_attr_by_pid(int pid, char *buf, int size);
-int _close_all_fds(int except);
+int _close_all_fds(const int except[], unsigned int n);
+int _set_extra_data(const char *extra_data);
 
 #endif /* __LAUNCHPAD_COMMON_H__ */
 
