@@ -92,7 +92,7 @@ static inline void __preexec_init(int argc, char **argv)
 			return;
 		}
 
-		handle = dlopen(sopath, RTLD_GLOBAL | RTLD_LAZY);
+		handle = dlopen(sopath, RTLD_GLOBAL | RTLD_LAZY | RTLD_NODELETE);
 		if (handle == NULL) {
 			free(type_t);
 			continue;
