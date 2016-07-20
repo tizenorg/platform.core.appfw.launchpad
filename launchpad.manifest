@@ -4,6 +4,7 @@
 	</request>
 	<assign>
 		<filesystem path="/usr/bin/launchpad-process-pool" exec_label="System::Privileged" />
+		<filesystem path="/usr/bin/launchpad-loader" exec_label="User" />
 	</assign>
 
 </manifest>
