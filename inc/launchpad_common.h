@@ -102,6 +102,7 @@ void _appinfo_free(appinfo_t *menu_info);
 char *_appinfo_get_app_path(appinfo_t *menu_info);
 int _proc_get_attr_by_pid(int pid, char *buf, int size);
 int _close_all_fds(int except);
+void _get_cpu_idle(long long *total, long long *idle);
 
 #endif /* __LAUNCHPAD_COMMON_H__ */
 
