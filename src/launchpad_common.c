@@ -31,6 +31,7 @@
 #include <linux/limits.h>
 #include <unistd.h>
 #include <tzplatform_config.h>
+#include <stdio.h>
 
 #include "launchpad_common.h"
 #include "key.h"
@@ -77,6 +78,42 @@ static int __read_proc(const char *path, char *buf, int size)
 	close(fd);
 
 	return ret;
+}
+
+void _get_cpu_idle(long long *total, long long *idle)
+{
+	FILE *fp;
+	int i;
+	long long sum = 0;
+	long long val;
+	long long iv = 0;
+
+	char buf[4]= { 0, };
+
+	fp = fopen("/proc/stat", "rt");
+
+	if (fp == NULL)
+		return;
+
+	if (fscanf(fp, "%3s", buf) == -1) {
+		fclose(fp);
+		return;
+	}
+
+	for (i = 0; i < 10; i++){
+		if (fscanf(fp, "%lld", &val) == -1) {
+			fclose(fp);
+			return;
+		}
+		sum += val;
+		if (i == 3) /* idle */
+			iv = val;
+	}
+
+	fclose(fp);
+
+	*total = sum;
+	*idle = iv;
 }
 
 void _set_sock_option(int fd, int cli)
