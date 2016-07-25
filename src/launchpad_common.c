@@ -814,30 +814,6 @@ int _close_all_fds(const int except)
 	return 0;
 }
 
-static int __mount_and_make_private(const char *source, const char *target)
-{
-	int ret;
-
-	ret = mount(NULL, "/", NULL,
-			MS_SLAVE | MS_REC, NULL);
-	if (ret != 0) {
-		_E("failed to set / as slave dir(%d)", ret);
-		return ret;
-	}
-
-	ret = mount(source, target,
-			NULL, MS_BIND, NULL);
-	if (ret != 0) {
-		_E("failed to mount legacy dir(%d): %s to %s",
-			ret, source, target);
-		return ret;
-	}
-
-	_D("end legacy path mount");
-
-	return ret;
-}
-
 int _mount_legacy_app_path(const char *app_root_path,
 			const char *pkgid)
 {
@@ -846,8 +822,6 @@ int _mount_legacy_app_path(const char *app_root_path,
 	char legacy_app_path[PATH_MAX];
 	char user_app_data_path[PATH_MAX];
 	char legacy_app_data_path[PATH_MAX];
-
-	_D("start legacy path mount");
 
 	char *app_data_paths[5] = {
 		"data",
@@ -865,9 +839,17 @@ int _mount_legacy_app_path(const char *app_root_path,
 		return -1;
 	}
 
+	ret = mount(NULL, "/", NULL,
+			MS_SLAVE | MS_REC, NULL);
+	if (ret != 0) {
+		_E("failed to set / as slave dir(%d)", ret);
+		return ret;
+	}
+
 	/* for user private app */
 	if (!strncmp(app_root_path, user_app_dir, strlen(user_app_dir))) {
-		return __mount_and_make_private(app_root_path, legacy_app_path);
+		return mount(app_root_path, legacy_app_path, NULL,
+				MS_BIND, NULL);
 	}
 
 	/* for global app */
@@ -880,8 +862,8 @@ int _mount_legacy_app_path(const char *app_root_path,
 
 		snprintf(legacy_app_data_path, PATH_MAX, "%s/%s",
 				legacy_app_path, app_data_paths[i]);
-		ret = __mount_and_make_private(user_app_data_path,
-				legacy_app_data_path);
+		ret = mount(user_app_data_path, legacy_app_data_path, NULL,
+				MS_BIND, NULL);
 		if (ret != 0)
 			return ret;
 	}
