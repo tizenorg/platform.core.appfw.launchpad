@@ -400,9 +400,16 @@ static int __prepare_candidate_process(int type, int loader_id)
 	char type_str[2] = {0, };
 	char loader_id_str[10] = {0, };
 	char argbuf[LOADER_ARG_LEN];
-	char *argv[] = {NULL, NULL, NULL, NULL, NULL, NULL};
-	candidate_process_context_t *cpt = __find_slot(type, loader_id);
+	char **argv = NULL;
+	candidate_process_context_t *cpt = NULL;
 
+	argv = calloc(LOADER_ARG_DUMMY + 2, sizeof(char *));
+	if (argv == NULL) {
+		_E("Failed to alloc");
+		return -1;
+	}
+
+	cpt = __find_slot(type, loader_id);
 	if (cpt == NULL)
 		return -1;
 
@@ -422,11 +429,13 @@ static int __prepare_candidate_process(int type, int loader_id)
 	pid = __fork_app_process(__exec_loader_process, argv);
 	if (pid == -1) {
 		_E("Failed to fork candidate_process");
+		free(argv);
 		return -1;
 	} else {
 		cpt->pid = pid;
 	}
 
+	free(argv);
 	return 0;
 }
 
@@ -620,17 +629,25 @@ static int __launch_directly(const char *appid, const char *app_path, int clifd,
 		bundle *kb, appinfo_t *menu_info,
 		candidate_process_context_t *cpc)
 {
-	struct app_launch_arg arg;
+	struct app_launch_arg *arg;
 
-	arg.appid = appid;
-	arg.app_path = app_path;
-	arg.menu_info = menu_info;
-	arg.kb = kb;
+	arg = malloc(sizeof(struct app_launch_arg));
+	if (arg == NULL) {
+		_E("failed to alloc app_launch_arg");
+		return -1;
+	}
 
-	int pid = __fork_app_process(__exec_app_process, &arg);
+	arg->appid = appid;
+	arg->app_path = app_path;
+	arg->menu_info = menu_info;
+	arg->kb = kb;
+
+	int pid = __fork_app_process(__exec_app_process, arg);
 
 	if (pid <= 0)
 		_E("failed to fork app process");
+
+	free(arg);
 
 	SECURE_LOGD("==> real launch pid : %d %s\n", pid, app_path);
 
