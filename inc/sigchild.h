@@ -235,9 +235,6 @@ static inline int __signal_fini(void)
 	int i;
 #endif
 
-	if (bus)
-		g_object_unref(bus);
-
 #ifndef PRELOAD_ACTIVATE
 	for (i = 0; i < _NSIG; i++)
 		signal(i, SIG_DFL);

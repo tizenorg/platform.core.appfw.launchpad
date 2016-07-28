@@ -380,8 +380,11 @@ static int __fork_app_process(int (*child_fn)(void *), void *arg)
 static int __exec_loader_process(void *arg)
 {
 	char **argv = arg;
+
 	__signal_unblock_sigchld();
 	__signal_fini();
+
+	_close_all_fds(0);
 
 	if (execv(argv[LOADER_ARG_PATH], argv) < 0)
 		_E("Failed to prepare candidate_process");
