@@ -23,7 +23,6 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
-#include <sys/resource.h>
 #include <sched.h>
 #include <stdbool.h>
 #include <malloc.h>
@@ -91,7 +90,6 @@ static candidate_process_context_t *__add_slot(int type, int loader_id,
 		int detection_method, int timeout_val);
 static int __remove_slot(int type, int loader_id);
 static int __add_default_slots(void);
-static int stack_limit;
 
 static int __make_loader_id(void)
 {
@@ -353,26 +351,27 @@ static void __send_result_to_caller(int clifd, int ret, const char *app_path)
 
 static int __fork_app_process(int (*child_fn)(void *), void *arg)
 {
-	char *stack;
-	char *stack_top;
 	int pid;
+	int ret;
 
-	stack = malloc(stack_limit);
-	if (stack == NULL) {
-		_E("failed to alloc child stack");
+	pid = fork();
+
+	if (pid == -1) {
+		_E("failed to clone child process");
 		return -1;
 	}
 
-	stack_top = stack + stack_limit;
+	if (pid == 0) {
+		ret = unshare(CLONE_NEWNS);
+		if (ret != 0) {
+			_E("failed to unshare mount namespace: %d", ret);
+			exit(ret);
+		}
 
-	pid = clone(child_fn, stack_top,
-		CLONE_NEWNS | CLONE_CHILD_SETTID | CLONE_CHILD_CLEARTID | SIGCHLD,
-		arg);
-
-	free(stack);
-
-	if (pid == -1)
-		_E("failed to clone child process");
+		ret = child_fn(arg);
+		_E("failed to exec app process: %d", ret);
+		exit(ret);
+	}
 
 	return pid;
 }
@@ -1474,21 +1473,12 @@ static void __set_priority(void)
 int main(int argc, char **argv)
 {
 	GMainLoop *mainloop = NULL;
-	int ret;
-	struct rlimit rlim;
 
 	mainloop = g_main_loop_new(NULL, FALSE);
 	if (!mainloop) {
 		_E("Failed to create glib main loop");
 		return -1;
 	}
-
-	ret = getrlimit(RLIMIT_STACK, &rlim);
-	if (ret != 0) {
-		_E("failed to get stack limit size! (%d)", errno);
-		return -1;
-	}
-	stack_limit = rlim.rlim_cur;
 
 	if (__before_loop(argc, argv) != 0) {
 		_E("process-pool Initialization failed!\n");
