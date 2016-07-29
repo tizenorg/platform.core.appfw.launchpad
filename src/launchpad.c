@@ -325,6 +325,8 @@ static int __real_send(int clifd, int ret)
 static void __send_result_to_caller(int clifd, int ret, const char *app_path)
 {
 	char *cmdline;
+	int count = 0;
+	char path[PATH_MAX];
 
 	_W("Check app launching");
 
@@ -336,6 +338,20 @@ static void __send_result_to_caller(int clifd, int ret, const char *app_path)
 		__real_send(clifd, ret);
 		return;
 	}
+
+	snprintf(path, sizeof(path), "/run/aul/apps/%d/%d/.app-sock",
+			getuid(), ret);
+	_D("socket path: %s", path);
+	do {
+		if (access(path, F_OK) == 0) {
+			_D("%s exists", path);
+			break;
+		}
+
+		_D("-- now wait socket creation --");
+		usleep(50 * 1000);
+		count++;
+	} while (count < 20);
 
 	cmdline = _proc_get_cmdline_bypid(ret);
 	if (cmdline == NULL) {
